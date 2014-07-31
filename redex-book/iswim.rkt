@@ -122,3 +122,7 @@
          (not (equal? (term hole) (term E)))))))
 
 ; (traces e-iswim-red (term (/ ((λ x (+ (/ 1 x) (err 2))) 7) 2)))
+
+;(render-language iswim)
+;(render-reduction-relation iswim-red)
+;(render-metafunction subst)
