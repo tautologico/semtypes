@@ -2,6 +2,7 @@
 Require Import Arith.
 Require Import List. 
 Require Import ListSet. 
+Require Import Tactics. 
 
 (** * The $\Lambda$ #Lambda# language 
 
@@ -155,12 +156,6 @@ Example subst_ex_2 :
   (\nat\Y --> Var X $ Var Y)[X := \Z --> Var Y] <> 
   (\Y --> (\Z --> Var Y) $ Var Y). 
 Proof. discriminate 1. Qed. 
-
-Ltac contra_equality := 
-  repeat match goal with
-    | [ H1 : ?X = ?Y, H2 : ?X <> ?Y |- _ ] => specialize (H2 H1); apply False_rec; exact H2
-    | [ H1 : ?X = ?Y, H2 : ?Y <> ?X |- _ ] => apply eq_sym in H1 
-  end.
 
 (** The substitution lemma for [subst_aux]. *)
 
