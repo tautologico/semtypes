@@ -251,19 +251,21 @@ Lemma not_in_remove_not_in_set : forall x v (S : set nat),
                                    ~(set_In x S). 
 Proof. 
   intros x v S Hneq Hnin.
-  induction S. intro Hcontra. apply Hnin. inversion Hcontra. 
-  
+  induction S. 
+  (* Case S = nil *) intuition. 
+
+  (* Case S = a :: S *)
   simpl in Hnin.  
   destruct (eq_nat_dec v a) in Hnin.
-  (* Case v = a *) 
-  rewrite -> e in Hneq. 
-  apply diff_head_not_tail_not_set. apply Hneq. apply Hnin. 
-  (* Case v <> a *)
-  simpl. intro Hcontra. apply Hnin. simpl. inversion Hcontra. left; apply H. 
-  right. 
-  apply not_in_diff_head in Hnin.
-  apply remove_diff. apply Hneq. 
-  apply H. 
+    (* Case v = a *) 
+    rewrite -> e in Hneq. 
+    apply (diff_head_not_tail_not_set x a S Hneq). assumption. 
+    (* Case v <> a *)
+    simpl. intro Hcontra; apply Hnin. simpl. inversion Hcontra. 
+      (* Case a = x *) 
+      left; apply H. 
+      (* Case set_In x (set_remove v S) *) 
+      right. apply not_in_diff_head in Hnin. apply remove_diff; assumption. 
 Qed. 
   
 Lemma not_free_abs_not_free : forall (A : Type) x v (M : term A),
@@ -272,25 +274,26 @@ Lemma not_free_abs_not_free : forall (A : Type) x v (M : term A),
                                 ~(set_In x (freevars M)).
 Proof.
   intros A x v M Hneq Hnin. simpl in Hnin. 
-  apply not_in_remove_not_in_set with (v := v). apply Hneq. 
-  apply Hnin. 
+  apply not_in_remove_not_in_set with (v := v); assumption. 
 Qed. 
 
 Lemma subst_non_free : forall (A : Type) x (M N : term A),
                          ~(set_In x (freevars M)) -> 
                          subst_aux M x N = M. 
 Proof. 
-  intros A x M N H. 
-  induction M. 
+  intros A x M N H. induction M. 
+
   (* Case M = Var v *)
   apply not_in_set_then_diff with (v := v) in H. 
   apply subst_aux_diff_var. assumption. reflexivity. 
-  (* Case M = Const _ *)
-  reflexivity. 
+
+  (* Case M = Const _ *) reflexivity. 
+
   (* Case M = Abs v M *)
   simpl.
   destruct (eq_nat_dec v x). reflexivity. f_equal. apply IHM. 
-  apply not_free_abs_not_free with (v := v). apply (not_eq_sym n). apply H. 
+  apply not_free_abs_not_free with (v := v). apply (not_eq_sym n). assumption. 
+
   (* Case M = App M1 M2 *)
   simpl in H. 
   simpl; f_equal; 
