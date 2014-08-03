@@ -2,6 +2,7 @@
 Require Import Arith.
 Require Import List. 
 Require Import ListSet. 
+Require Import SetUtil. 
 Require Import Tactics. 
 
 (** * The $\Lambda$ #Lambda# language 
@@ -124,7 +125,7 @@ Proof. reflexivity. Qed.
 Fixpoint subst_aux {A : Type} (orig : term A) (v : var) (t : term A) : term A := 
   match orig with
     | Const _ => orig
-    | Var x => if beq_nat v x then t else orig
+    | Var x => if beq_nat x v then t else orig
     | Abs x body => if eq_nat_dec x v then orig else Abs x (subst_aux body v t) (* assumes no capture will happen *)
     | App m n => App (subst_aux m v t) (subst_aux n v t)
   end.
@@ -136,13 +137,6 @@ Fixpoint subst_aux {A : Type} (orig : term A) (v : var) (t : term A) : term A :=
 
 Definition freshen_boundvars {A : Type} (rator rand : term A) : term A := 
   shift_bound rator (S (max_list (freevars rand))).
-
-Lemma freshen_disjunct : forall (A : Type) (M N M' : term A), 
-                           M' = freshen_boundvars M N -> 
-                           set_inter eq_nat_dec (boundvars M') (freevars N) = empty_set nat. 
-Proof. 
-  intros A M N M' H. 
-  Admitted. (* TODO: find a good way to express (boundvars M') and (freevars N) are disjoint *)
 
 Definition subst {A : Type} (orig : term A) (v : var) (t : term A) : term A := 
   subst_aux (freshen_boundvars orig t) v t. 
@@ -163,7 +157,7 @@ Lemma subst_aux_diff_var : forall (A : Type) x y (M : term A),
                              x <> y -> subst_aux (Var x) y M = Var x. 
 Proof. 
   intros A x y M H. 
-  simpl. replace (beq_nat y x) with (false).
+  simpl. replace (beq_nat x y) with (false).
   reflexivity. apply eq_sym. rewrite -> beq_nat_false_iff. intuition.
 Qed. 
 
@@ -180,88 +174,6 @@ Proof.
   intros A x v M Hm Hnotin. 
   rewrite -> Hm in Hnotin. simpl in Hnotin. intuition. 
 Qed. 
-
-Lemma diff_head_in_tail_in_set : forall x v (S : set nat),
-                                   x <> v -> set_In x (v :: S) -> set_In x S. 
-Proof. 
-  intros x v S Hneq Hin. simpl in Hin. 
-  inversion Hin; [ contra_equality | assumption ]. 
-Qed. 
-
-Lemma remove_diff : forall x v (S : set nat),
-                      x <> v -> set_In x S -> set_In x (set_remove eq_nat_dec v S). 
-Proof. 
-  intros x v S Hneq Hin. 
-  induction S. 
-  (* Case S = empty_set (nil) *)
-  inversion Hin.  
-
-  (* Case S = a :: S' *)
-  simpl. 
-  destruct (eq_nat_dec v a). 
-    (* Case v = a *)
-    apply diff_head_in_tail_in_set with (v := a). 
-    rewrite -> e in Hneq. apply Hneq. 
-    apply Hin. 
-
-    (* Case v <> a *)
-    simpl.
-    destruct (eq_nat_dec x a) as [ Eq | Neq ]. 
-      (* Case x = a *) intuition. 
-      (* Case x <> a *)
-      right. apply IHS. apply diff_head_in_tail_in_set with (v := a); assumption. 
-Qed. 
-  
-Lemma diff_head_not_in_tail : forall x v (S : set nat),
-                                x <> v -> ~(set_In x (v :: S)) -> 
-                                ~(set_In x S). 
-Proof. 
-  intros x v S Hneq Hnin.
-  intro Hcontra. apply Hnin. 
-  simpl. right. apply Hcontra. 
-Qed. 
-
-Lemma diff_head_not_tail_not_set : forall x v (S : set nat),
-                                     x <> v -> 
-                                     ~(set_In x S) -> 
-                                     ~(set_In x (v :: S)).
-Proof. 
-  intros x v S Hneq Hnin. 
-  intro Hcontra. apply Hnin. simpl in Hcontra.  
-  inversion Hcontra; [ contra_equality |  assumption ]. 
-Qed. 
-
-Lemma not_in_diff_head : forall x v (S : set nat),
-                           ~(set_In x (v :: S)) -> 
-                           x <> v. 
-Proof. 
-  intros x v S Hnin Hcontra. apply Hnin. 
-  simpl. left. intuition. 
-Qed. 
-
-
-Lemma not_in_remove_not_in_set : forall x v (S : set nat),
-                                   x <> v -> 
-                                   ~(set_In x (set_remove eq_nat_dec v S)) -> 
-                                   ~(set_In x S). 
-Proof. 
-  intros x v S Hneq Hnin.
-  induction S. 
-  (* Case S = nil *) intuition. 
-
-  (* Case S = a :: S *)
-  simpl in Hnin.  
-  destruct (eq_nat_dec v a) in Hnin.
-    (* Case v = a *) 
-    rewrite -> e in Hneq. 
-    apply (diff_head_not_tail_not_set x a S Hneq). assumption. 
-    (* Case v <> a *)
-    simpl. intro Hcontra; apply Hnin. simpl. inversion Hcontra. 
-      (* Case a = x *) 
-      left; apply H. 
-      (* Case set_In x (set_remove v S) *) 
-      right. apply not_in_diff_head in Hnin. apply remove_diff; assumption. 
-Qed. 
   
 Lemma not_free_abs_not_free : forall (A : Type) x v (M : term A),
                                 x <> v -> 
@@ -269,7 +181,7 @@ Lemma not_free_abs_not_free : forall (A : Type) x v (M : term A),
                                 ~(set_In x (freevars M)).
 Proof.
   intros A x v M Hneq Hnin. simpl in Hnin. 
-  apply not_in_remove_not_in_set with (v := v); assumption. 
+  apply not_in_remove_not_in_set with (y := v) (Aeq_dec := eq_nat_dec); assumption. 
 Qed. 
 
 Lemma subst_non_free : forall (A : Type) x (M N : term A),
