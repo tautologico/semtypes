@@ -156,14 +156,20 @@ Example subst_ex_2 :
   (\Y --> (\Z --> Var Y) $ Var Y). 
 Proof. discriminate 1. Qed. 
 
+Ltac contra_equality := 
+  repeat match goal with
+    | [ H1 : ?X = ?Y, H2 : ?X <> ?Y |- _ ] => specialize (H2 H1); apply False_rec; exact H2
+    | [ H1 : ?X = ?Y, H2 : ?Y <> ?X |- _ ] => apply eq_sym in H1 
+  end.
+
 (** The substitution lemma for [subst_aux]. *)
 
 Lemma subst_aux_diff_var : forall (A : Type) x y (M : term A),
                              x <> y -> subst_aux (Var x) y M = Var x. 
 Proof. 
-  intros A x y M H. simpl. replace (beq_nat y x) with (false). 
-  reflexivity. apply eq_sym. rewrite -> beq_nat_false_iff. 
-  apply not_eq_sym. apply H. 
+  intros A x y M H. 
+  simpl. replace (beq_nat y x) with (false).
+  reflexivity. apply eq_sym. rewrite -> beq_nat_false_iff. intuition.
 Qed. 
 
 Lemma subst_aux_same_var : forall (A : Type) x (M : term A),
@@ -177,18 +183,14 @@ Lemma not_in_set_then_diff : forall (A : Type) x v (M : term A),
                                v <> x.
 Proof. 
   intros A x v M Hm Hnotin. 
-  rewrite -> Hm in Hnotin. simpl in Hnotin. 
-  intro Hcontra. apply Hnotin. 
-  left. assumption. 
+  rewrite -> Hm in Hnotin. simpl in Hnotin. intuition. 
 Qed. 
 
 Lemma diff_head_in_tail_in_set : forall x v (S : set nat),
                                    x <> v -> set_In x (v :: S) -> set_In x S. 
 Proof. 
-  intros x v S Hneq Hin. 
-  simpl in Hin. 
-  inversion Hin. apply eq_sym in H. apply Hneq in H. apply False_rec; apply H. 
-  apply H. 
+  intros x v S Hneq Hin. simpl in Hin. 
+  inversion Hin; [ contra_equality | assumption ]. 
 Qed. 
 
 Lemma remove_diff : forall x v (S : set nat),
@@ -209,9 +211,10 @@ Proof.
 
     (* Case v <> a *)
     simpl.
-    destruct (eq_nat_dec x a). left; apply eq_sym; apply e. 
-    right. apply IHS. apply diff_head_in_tail_in_set with (v := a). 
-    apply n0. apply Hin. 
+    destruct (eq_nat_dec x a) as [ Eq | Neq ]. 
+      (* Case x = a *) intuition. 
+      (* Case x <> a *)
+      right. apply IHS. apply diff_head_in_tail_in_set with (v := a); assumption. 
 Qed. 
   
 Lemma diff_head_not_in_tail : forall x v (S : set nat),
