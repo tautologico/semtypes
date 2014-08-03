@@ -221,7 +221,7 @@ Lemma diff_head_not_in_tail : forall x v (S : set nat),
                                 x <> v -> ~(set_In x (v :: S)) -> 
                                 ~(set_In x S). 
 Proof. 
-  intros x v S Hneq Hnin. 
+  intros x v S Hneq Hnin.
   intro Hcontra. apply Hnin. 
   simpl. right. apply Hcontra. 
 Qed. 
@@ -232,9 +232,8 @@ Lemma diff_head_not_tail_not_set : forall x v (S : set nat),
                                      ~(set_In x (v :: S)).
 Proof. 
   intros x v S Hneq Hnin. 
-  intro Hcontra. apply Hnin. simpl in Hcontra. inversion Hcontra. 
-  apply eq_sym in H. apply Hneq in H. apply False_rec. apply H. 
-  apply H. 
+  intro Hcontra. apply Hnin. simpl in Hcontra.  
+  inversion Hcontra; [ contra_equality |  assumption ]. 
 Qed. 
 
 Lemma not_in_diff_head : forall x v (S : set nat),
@@ -242,7 +241,7 @@ Lemma not_in_diff_head : forall x v (S : set nat),
                            x <> v. 
 Proof. 
   intros x v S Hnin Hcontra. apply Hnin. 
-  left. apply eq_sym. apply Hcontra. 
+  simpl. left. intuition. 
 Qed. 
 
 
@@ -298,6 +297,8 @@ Proof.
     [ apply IHM1 | apply IHM2 ]; intro Hcontra;  apply H; 
     [ apply set_union_intro1 | apply set_union_intro2 ]; apply Hcontra. 
 Qed. 
+
+(* TODO: Define the hygiene conditions and use them in the lemma *)
 
 Lemma subst_aux_lemma : forall (A : Type) x y (M N L : term A), 
                              x <> y -> ~(set_In x (freevars L)) ->
