@@ -288,7 +288,6 @@ Lemma in_split2_dec : forall (A : Type) x y (l l1 l2 l3 : list A),
                         {l = l1 ++ (x :: l2) ++ (y :: l3)} + {l = l1 ++ (y :: l2) ++ (x :: l3)}.
 Proof. 
   intros A x y l l1 l2 l3 Hin1 Hin2. 
-*)
 
 Lemma hygienic_free_bound : forall (A : Type) (ts : list (term A)) (t1 t2 : term A),
                               hygienic ts -> In t1 ts -> In t2 ts -> 
@@ -304,6 +303,7 @@ Proof.
   intros A x t1 t2 ts Hhyg Hin1 Hin2 Hx. 
   
 Import ListNotations. 
+*)
 
 (* Substitution lemma for [subst_aux] *)
 Lemma subst_aux_lemma : forall (A : Type) x y (M N L : term A), 
