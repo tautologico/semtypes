@@ -209,7 +209,103 @@ Proof.
 Qed. 
 
 (* TODO: Define the hygiene conditions and use them in the lemma *)
+Definition hygienic2 (A : Type) (M N : term A) : Prop := 
+  (boundvars M) >< (freevars N) /\ (freevars M) >< (boundvars N). 
 
+Section hygiene. 
+  Variable A : Type. 
+  Local Set Implicit Arguments. 
+  
+  Inductive free_not_bound : term A -> list (term A) -> Prop := 
+  | fnb_nil : forall (t : term A), free_not_bound t nil
+  | fnb_cons : forall (t1 t2 : term A) (ts : list (term A)), 
+                 (freevars t1) >< (boundvars t2) -> 
+                 free_not_bound t1 ts -> 
+                 free_not_bound t1 (t2 :: ts). 
+
+  Lemma fnb_app : forall (t : term A) (ts1 ts2 : list (term A)),
+                    free_not_bound t (ts1 ++ ts2) -> free_not_bound t ts2. 
+  Proof. 
+    intros t ts1 ts2 Hfnb. 
+    induction ts1 as [ | t' ts1' ]. 
+    (* Case ts1 = nil *)
+    rewrite app_nil_l in Hfnb. assumption. 
+    (* Case ts1 = t' :: ts1' *)
+    apply IHts1'. inversion Hfnb. assumption. 
+  Qed. 
+
+  Lemma fnb_split : forall (t1 t2 : term A) (ts : list (term A)),
+                      free_not_bound t1 ts -> In t2 ts -> 
+                      exists ts' : list (term A), free_not_bound t1 (t2 :: ts'). 
+  Proof. 
+    intros t1 t2 ts Hfnb Hin. 
+    apply in_split in Hin. 
+    destruct Hin as [ ts1 [ ts2 ] ]. 
+    rewrite H in Hfnb. apply fnb_app in Hfnb. 
+    exists ts2. 
+    assumption. 
+  Qed. 
+
+  Lemma disjunct_free_not_bound : forall (t1 t2 : term A) x,
+                                    (freevars t1) >< (boundvars t2) -> 
+                                    set_In x (freevars t1) -> 
+                                    ~(set_In x (boundvars t2)). 
+  Proof. 
+    intros t1 t2 x Hdis Hin. 
+    intro Hcontra. 
+    Admitted. 
+
+  Theorem free_in_term_not_bound : 
+    forall (t1 : term A) x (ts : list (term A)),
+      free_not_bound t1 ts -> set_In x (freevars t1) -> 
+      (forall t2 : term A, In t2 ts -> ~(set_In x (boundvars t2))).
+  Proof. 
+    intros t1 x ts Hfnb Hin t2 Hin2. 
+    apply fnb_split with (t2 := t2) in Hfnb. inversion Hfnb. 
+    Admitted. 
+
+End hygiene. 
+
+(* 
+Fixpoint and_all (lp : list Prop) : Prop := 
+  match lp with
+    | nil => True
+    | p1 :: nil => p1
+    | p1 :: lp' => p1 /\ (and_all lp')
+  end.
+
+Fixpoint hygienic {A : Type} (ts : list (term A)) : Prop := 
+  match ts with
+      nil => True
+    | t :: nil => True
+    | t :: ts' => (and_all (map (fun t2 => (boundvars t) >< (freevars t2)) ts')) /\
+                  (and_all (map (fun t2 => (freevars t) >< (boundvars t2)) ts')) /\
+                  hygienic ts'
+  end.
+
+Lemma in_split2_dec : forall (A : Type) x y (l l1 l2 l3 : list A),
+                        In x l -> In y l -> 
+                        {l = l1 ++ (x :: l2) ++ (y :: l3)} + {l = l1 ++ (y :: l2) ++ (x :: l3)}.
+Proof. 
+  intros A x y l l1 l2 l3 Hin1 Hin2. 
+*)
+
+Lemma hygienic_free_bound : forall (A : Type) (ts : list (term A)) (t1 t2 : term A),
+                              hygienic ts -> In t1 ts -> In t2 ts -> 
+                              (freevars t1) >< (boundvars t2).
+Proof. 
+  intros A ts t1 t2 Hhyg Hin1 Hin2. 
+  
+Theorem hygienic_free_not_bound : 
+  forall (A : Type) x (t1 t2 : term A) (ts : list (term A)),
+    hygienic ts -> In t1 ts -> In t2 ts -> 
+    set_In x (freevars t1) -> ~(set_In x (boundvars t2)).
+Proof. 
+  intros A x t1 t2 ts Hhyg Hin1 Hin2 Hx. 
+  
+Import ListNotations. 
+
+(* Substitution lemma for [subst_aux] *)
 Lemma subst_aux_lemma : forall (A : Type) x y (M N L : term A), 
                              x <> y -> ~(set_In x (freevars L)) ->
                              set_inter eq_nat_dec (boundvars M) (freevars N) = empty_set nat ->
@@ -217,27 +313,29 @@ Lemma subst_aux_lemma : forall (A : Type) x y (M N L : term A),
 Proof. 
   intros A x y M N L Hneq Hnfree Hdis. 
   induction M. 
-    (* M = Var v *)
-    destruct (eq_nat_dec v x). 
-      (* Case v = x *)
-      rewrite e. rewrite subst_aux_same_var. rewrite subst_aux_diff_var. 
-      rewrite subst_aux_same_var. reflexivity. apply Hneq. 
-      (* Case v <> x *)
-      rewrite subst_aux_diff_var. destruct (eq_nat_dec v y). 
-        (* Case v = y *)
-        rewrite e. rewrite subst_aux_same_var. apply eq_sym. 
-        apply subst_non_free. apply Hnfree. 
-        (* Case v <> y *)
-        repeat rewrite subst_aux_diff_var; try reflexivity; try apply n; try apply n0. 
-        apply n. 
-    
-    (* M = Const a *)
-    reflexivity. 
 
-    (* M = Abs v M' *)
-    simpl. 
+  (* M = Var v *)
+  destruct (eq_nat_dec v x). 
+    (* Case v = x *)
+    rewrite e. rewrite subst_aux_same_var. rewrite subst_aux_diff_var. 
+    rewrite subst_aux_same_var. reflexivity. apply Hneq. 
+    (* Case v <> x *)
+    rewrite subst_aux_diff_var. destruct (eq_nat_dec v y). 
+      (* Case v = y *)
+      rewrite e. rewrite subst_aux_same_var. apply eq_sym. 
+      apply subst_non_free. apply Hnfree. 
+      (* Case v <> y *)
+      repeat rewrite subst_aux_diff_var; try reflexivity; try apply n; try apply n0. 
+      apply n. 
     
-    (* M = App M N *)
+  (* M = Const a *) reflexivity. 
+
+  (* M = Abs v M' *)
+  simpl. 
+  destruct (eq_nat_dec v x). 
+    
+    
+  (* M = App M N *)
   Admitted. 
   
 
