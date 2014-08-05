@@ -3,6 +3,7 @@
 Require Import List.
 Require Export ListSet. 
 Require Import Tactics. 
+Require Import Arith.   (* for eq_nat_dec *)
 
 Set Implicit Arguments. 
 
@@ -88,4 +89,22 @@ Section theorems.
         right. apply not_in_diff_head in Hnin. apply remove_diff; assumption. 
   Qed. 
 
+  Theorem not_in_empty : forall x : A, ~set_In x (empty_set A). 
+  Proof. 
+    inversion 1. 
+  Qed. 
+
 End theorems. 
+
+(** This notation is specific for sets of nats *)
+
+Notation "a >< b" := 
+  (set_inter eq_nat_dec a b = empty_set nat) (at level 10, no associativity). 
+
+Theorem disjunct_not_in_both : forall x (s1 s2 : set nat), 
+                                 s1 >< s2 -> set_In x s1 -> ~(set_In x s2). 
+Proof. 
+  intros x s1 s2 Hdis Hin. intro Hcontra. 
+  apply set_inter_intro with (y := s2) (Aeq_dec := eq_nat_dec) in Hin. 
+  rewrite Hdis in Hin. apply not_in_empty in Hin. assumption. assumption. 
+Qed. 
