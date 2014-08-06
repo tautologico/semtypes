@@ -75,6 +75,22 @@ Fixpoint boundvars {A : Type} (t : term A) : set var :=
     | App m n => set_union eq_nat_dec (boundvars m) (boundvars n)
   end.
 
+Fixpoint variables {A : Type} (t : term A) : set var := 
+  match t with
+    | Const _ => nil
+    | Var v => v :: nil
+    | Abs v body => set_add eq_nat_dec v (variables body)
+    | App m n => set_union eq_nat_dec (variables m) (variables n)
+  end.
+
+Fixpoint max_var {A : Type} (t : term A) : var := 
+  match t with
+    | Const _ => 0
+    | Var v => v
+    | Abs v body => max (max_var body) v
+    | App m n => max (max_var m) (max_var n)
+  end. 
+
 Fixpoint max_list_aux (l : list nat) (m : nat) : nat :=
   match l with
       nil => m
@@ -86,7 +102,15 @@ Definition max_list (l : list nat) := max_list_aux l 0.
 Definition fresh_variable {A : Type} (t : term A) : var := 
   S (max_list (boundvars t)). 
 
+Definition fresh_variable2 {A : Type} (t1 t2 : term A) : var := 
+  S (max (max_var t1) (max_var t2)).
+
+
 (** ** Substitution and the Substitution Lemma *)
+
+(** Convert term [t], considered the body of an abstraction bound,
+ to use variable [v2] in place of [v1]. *)
+
 Fixpoint alpha_convert {A : Type} (t : term A) (v1 v2 : var) : term A := 
   match t with
     | Const _ => t
@@ -129,6 +153,20 @@ Fixpoint subst_aux {A : Type} (orig : term A) (v : var) (t : term A) : term A :=
     | Abs x body => if eq_nat_dec x v then orig else Abs x (subst_aux body v t) (* assumes no capture will happen *)
     | App m n => App (subst_aux m v t) (subst_aux n v t)
   end.
+
+(** Substitute [t] for [v] in term [orig], alpha-converting bound variables to 
+    a fresh variable not present in [t] or [orig]. *)
+
+Fixpoint subst_fresh {A : Type} (orig : term A) (v : var) (t : term A) : term A := 
+  match orig with
+    | Const _ => orig
+    | Var x => if beq_nat x v then t else orig
+    | Abs x body => if eq_nat_dec x v then orig 
+                    else let v' := fresh_variable2 orig t in 
+                         Abs v' (alpha_convert body v v')
+    | App m n => App (subst_fresh m v t) (subst_fresh n v t)
+  end.
+
 
 (** Makes all bound variables in [rator] different from every free variable in 
  [rand], using the fact that variables are represented as numbers: the idea is 
