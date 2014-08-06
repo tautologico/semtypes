@@ -105,6 +105,59 @@ Definition fresh_variable {A : Type} (t : term A) : var :=
 Definition fresh_variable2 {A : Type} (t1 t2 : term A) : var := 
   S (max (max_var t1) (max_var t2)).
 
+Lemma freevar_le_max : forall (A : Type) (t : term A) v,
+                           set_In v (freevars t) -> v <= (max_var t).
+Proof. 
+  intros A t v Hin. 
+  induction t. 
+  (* Case t = Var v0 *)
+  inversion Hin. rewrite H. reflexivity. inversion H. 
+  (* Case t = Const a *)
+  inversion Hin. 
+  (* Case t = Abs v0 t *)
+  simpl. assert (Hle: (max_var t) <= max (max_var t) v0). apply Max.le_max_l. 
+  apply le_trans with (m := max_var t). apply IHt. simpl in Hin. 
+  apply in_remove_in_orig in Hin. assumption. assumption. 
+  (* Case t = App t1 t2 *)
+  simpl. simpl in Hin. apply set_union_elim in Hin. inversion Hin. 
+  assert (Hle: (max_var t1) <= max (max_var t1) (max_var t2)). apply Max.le_max_l. 
+  apply le_trans with (m := max_var t1). apply IHt1. assumption. assumption. 
+  assert (Hle: (max_var t2) <= max (max_var t1) (max_var t2)). apply Max.le_max_r. 
+  apply le_trans with (m := max_var t2). apply IHt2. assumption. assumption. 
+Qed. 
+
+Lemma fresh2_gt_free_l : forall (A : Type) (t1 t2 : term A) v,
+                             set_In v (freevars t1) -> v < (fresh_variable2 t1 t2). 
+Proof. 
+  intros A t1 t2 v Hin. 
+  apply freevar_le_max in Hin. unfold fresh_variable2.
+  assert (Hmax: (max_var t1) <= max (max_var t1) (max_var t2)). apply Max.le_max_l.
+  assert (Hle: v <= max (max_var t1) (max_var t2)). 
+  apply le_trans with (m := max_var t1); assumption. 
+  apply le_lt_n_Sm. assumption. 
+Qed. 
+
+Lemma fresh2_gt_free_r : forall (A : Type) (t1 t2 : term A) v,
+                             set_In v (freevars t2) -> v < (fresh_variable2 t1 t2). 
+Proof. 
+  intros A t1 t2 v Hin. 
+  apply freevar_le_max in Hin. unfold fresh_variable2.
+  assert (Hmax: (max_var t2) <= max (max_var t1) (max_var t2)). apply Max.le_max_r.
+  assert (Hle: v <= max (max_var t1) (max_var t2)). 
+  apply le_trans with (m := max_var t2); assumption. 
+  apply le_lt_n_Sm. assumption. 
+Qed. 
+
+Theorem fresh2_free : forall (A : Type) (t1 t2 : term A),
+                        ~(set_In (fresh_variable2 t1 t2) (freevars t1)) /\
+                        ~(set_In (fresh_variable2 t1 t2) (freevars t2)). 
+Proof. 
+  intros A t1 t2. 
+  split; intro Hcontra; 
+    [ apply fresh2_gt_free_l with (t2 := t2) in Hcontra |
+      apply fresh2_gt_free_r with (t1 := t1) in Hcontra ]; 
+    apply lt_irrefl in Hcontra; assumption. 
+Qed. 
 
 (** ** Substitution and the Substitution Lemma *)
 
