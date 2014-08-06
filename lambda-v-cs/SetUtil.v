@@ -39,6 +39,49 @@ Section theorems.
         right. apply IHS. apply diff_head_in_tail_in_set with (y := a); assumption. 
   Qed. 
 
+  Lemma remove_add : forall x y z (S : set A),
+                       x <> z -> 
+                       set_In x (set_remove Aeq_dec y (z :: S)) -> 
+                       set_In x (set_remove Aeq_dec y S).
+  Proof. 
+    intros x y z S Hneq Hin. 
+    simpl in Hin. destruct (Aeq_dec y z). 
+    apply remove_diff. rewrite <- e in Hneq; apply Hneq. assumption. 
+    inversion Hin. contra_equality. assumption. 
+  Qed. 
+
+  Lemma in_remove_in_orig : forall (x y : A) (S : set A),
+                              set_In x (set_remove Aeq_dec y S) -> set_In x S. 
+  Proof. 
+    intros x y S Hin. 
+    induction S. inversion Hin. 
+    simpl in Hin. 
+    destruct (Aeq_dec y a). 
+    simpl. right; assumption. simpl. simpl in Hin. inversion Hin. 
+    left; assumption. right. apply IHS. assumption. 
+  Qed. 
+
+  Lemma remove_head : forall x y (S : set A),
+                        x = y -> 
+                        set_remove Aeq_dec x (y :: S) = S.
+  Proof. 
+    intros x y S Heq. simpl. 
+    destruct (Aeq_dec x y). reflexivity. contra_equality. 
+  Qed. 
+
+  (* 
+  Lemma remove_remain_diff : forall x v (S : set A),
+                               set_In x (set_remove Aeq_dec v S) -> x <> v. 
+  Proof. 
+    intros x v S Hin. induction S. 
+    (* Case S = nil *) inversion Hin. 
+
+    (* Case S = a :: S*)
+    apply IHS.
+    simpl in Hin. 
+    destruct (Aeq_dec v a). 
+  *)
+    
   Lemma diff_head_not_in_tail : forall x y (S : set A),
                                   x <> y -> ~(set_In x (y :: S)) -> 
                                   ~(set_In x S). 
@@ -101,10 +144,17 @@ End theorems.
 Notation "a >< b" := 
   (set_inter eq_nat_dec a b = empty_set nat) (at level 10, no associativity). 
 
-Theorem disjunct_not_in_both : forall x (s1 s2 : set nat), 
+Theorem disjunct_symm : forall (s1 s2 : set nat),
+                          s1 >< s2 -> s2 >< s1. 
+Proof. 
+  intros s1 s2 Hdis. inversion Hdis. 
+  Admitted. 
+
+Theorem disjunct_in1_not_in2 : forall x (s1 s2 : set nat), 
                                  s1 >< s2 -> set_In x s1 -> ~(set_In x s2). 
 Proof. 
   intros x s1 s2 Hdis Hin. intro Hcontra. 
   apply set_inter_intro with (y := s2) (Aeq_dec := eq_nat_dec) in Hin. 
   rewrite Hdis in Hin. apply not_in_empty in Hin. assumption. assumption. 
 Qed. 
+
