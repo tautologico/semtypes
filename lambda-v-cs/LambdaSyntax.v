@@ -159,6 +159,12 @@ Proof.
     apply lt_irrefl in Hcontra; assumption. 
 Qed. 
 
+Theorem fresh2_sym : forall (A : Type) (t1 t2 : term A),
+                       fresh_variable2 t1 t2 = fresh_variable2 t2 t1. 
+Proof. 
+  intros. unfold fresh_variable2. f_equal. apply Max.max_comm. 
+Qed. 
+
 (** ** Substitution and the Substitution Lemma *)
 
 (** Convert term [t], considered the body of an abstraction bound,
@@ -220,6 +226,139 @@ Fixpoint subst_fresh {A : Type} (orig : term A) (v : var) (t : term A) : term A 
     | App m n => App (subst_fresh m v t) (subst_fresh n v t)
   end.
 
+(** Equivalence up to alpha conversion. *)
+
+Fixpoint assoc_var (l : list (var * var)) (v : var) : option var := 
+  match l with
+      nil => None
+    | (v1, v2) :: rl => if beq_nat v v1 then Some v2 else assoc_var rl v
+  end.
+
+Import ListNotations. 
+
+Example assoc_var_1 : assoc_var [(1, 5); (2, 7); (11, 8)] 3 = None. 
+Proof. reflexivity. Qed. 
+
+Example assoc_var_2 : assoc_var [(1, 5); (2, 7); (11, 8)] 2 = Some 7. 
+Proof. reflexivity. Qed. 
+
+Fixpoint sub_var (ls : list (var * var)) (v : var) : var := 
+  match assoc_var ls v with
+    | None => v
+    | Some v' => v'
+  end.
+
+Definition next_var (v : var) : var := S v. 
+
+Definition var_fresh {A : Type} (v : var) (t : term A) : Prop := 
+  forall v' : var, set_In v' (variables t) -> v > v'. 
+
+Definition var_fresh2 {A : Type} (v : var) (t1 t2 : term A) : Prop := 
+  forall v' : var, 
+    set_In v' (set_union eq_nat_dec (variables t1) (variables t2)) -> v > v'. 
+
+Inductive aequiv {A : Type} : var -> term A -> term A -> Prop := 
+| ae_const : forall v a b, a = b -> aequiv v (Const a) (Const b)
+| ae_var : forall v x y, x = y -> aequiv v (Var x) (Var y)
+| ae_app : forall v m1 m2 n1 n2, aequiv v m1 m2 -> aequiv v n1 n2 -> 
+                                 aequiv v (App m1 n1) (App m2 n2)
+| ae_abs_sv : forall v x b1 b2, aequiv v b1 b2 -> aequiv v (Abs x b1) (Abs x b2)
+| ae_abs : forall v x1 x2 b1 b2, 
+             var_fresh v b1 -> var_fresh v b2 -> 
+             aequiv (next_var v) (alpha_convert b1 x1 v) (alpha_convert b2 x2 v) -> 
+             aequiv v (Abs x1 b1) (Abs x2 b2).
+
+Definition alpha_eq {A : Type} (t1 t2 : term A) : Prop := 
+  aequiv (fresh_variable2 t1 t2) t1 t2. 
+
+Theorem aequiv_refl : forall (A : Type) (v : var) (t : term A), aequiv v t t. 
+Proof. 
+  intros A v t. 
+  induction t; constructor; try reflexivity; try assumption. 
+Qed. 
+
+Theorem alpha_eq_refl : forall (A : Type) (t : term A), alpha_eq t t. 
+Proof. 
+  intros; apply aequiv_refl. 
+Qed. 
+
+Theorem aequiv_sym : forall (A : Type) (v : var) (t1 t2 : term A), 
+                       aequiv v t1 t2 -> aequiv v t2 t1. 
+Proof. 
+  intros A v t1 t2 H12. 
+  induction H12; constructor; try apply eq_sym; assumption. 
+Qed. 
+
+Theorem alpha_eq_sym : forall (A : Type) (t1 t2 : term A),
+                         alpha_eq t1 t2 -> alpha_eq t2 t1. 
+Proof. 
+  intros. apply aequiv_sym. rewrite fresh2_sym. assumption. 
+Qed. 
+
+Theorem aequiv_trans : forall (A : Type) (v : var) (t1 t2 t3 : term A),
+                         aequiv v t1 t2 -> aequiv v t2 t3 -> aequiv v t1 t3. 
+Proof. 
+  intros A v t1 t2 t3 H12 H23. generalize dependent t3.  
+  assert (H12' : aequiv v t1 t2). assumption. 
+  induction H12. 
+    intros; rewrite H; assumption.
+    intros; rewrite H; assumption. 
+    intros. inversion H23. 
+      apply ae_app; [ apply IHaequiv1 | apply IHaequiv2 ]; assumption. 
+    intros. inversion H23. 
+      apply ae_abs_sv. apply IHaequiv; assumption. 
+      apply ae_abs. admit. assumption. 
+    
+
+Inductive alpha_equiv {A : Type} : term A -> term A -> Prop := 
+| aeq_eq : forall t1 t2, t1 = t2 -> alpha_equiv t1 t2 
+| aeq_const : forall a b, a = b -> alpha_equiv (Const a) (Const b)
+| aeq_var : forall x y, x = y -> alpha_equiv (Var x) (Var y)
+| aeq_app : forall m1 m2 n1 n2 : term A, alpha_equiv m1 m2 -> alpha_equiv n1 n2 -> 
+                                         alpha_equiv (App m1 n1) (App m2 n2)
+| aeq_abs : forall x1 x2 b1 b2, 
+              alpha_equiv (alpha_convert b1 x1 (fresh_variable2 (Abs x1 b1) (Abs x2 b2)))
+                          (alpha_convert b2 x2 (fresh_variable2 (Abs x1 b1) (Abs x2 b2))) -> 
+              alpha_equiv (Abs x1 b1) (Abs x2 b2). 
+
+Theorem aeq_refl : forall (A : Type) (t : term A), alpha_equiv t t. 
+Proof. 
+  intros. apply aeq_eq; reflexivity. 
+  (* 
+  intros. induction t. 
+  apply aeq_var. apply eq_refl. 
+  apply aeq_const. apply eq_refl. 
+  apply aeq_abs. 
+   *)
+Qed. 
+
+Theorem aeq_symm : forall (A : Type) (t1 t2 : term A), 
+                     alpha_equiv t1 t2 -> alpha_equiv t2 t1.
+Proof. 
+  intros. induction H. 
+  rewrite H. apply aeq_eq; apply eq_refl. 
+  apply aeq_const; apply eq_sym; assumption. 
+  apply aeq_var; apply eq_sym; assumption. 
+  apply aeq_app. apply IHalpha_equiv1. apply IHalpha_equiv2. 
+  apply aeq_abs. rewrite fresh2_sym. apply IHalpha_equiv. 
+Qed. 
+
+Theorem aeq_trans : forall (A : Type) (t1 t2 t3 : term A),
+                      alpha_equiv t1 t2 -> alpha_equiv t2 t3 -> 
+                      alpha_equiv t1 t3. 
+Proof. 
+  intros A t1 t2 t3 H12 H23. generalize dependent t3. 
+  assert (H12' : alpha_equiv t1 t2). assumption. 
+  induction H12'; try (intros t3 H23; rewrite H; assumption).  
+
+  intros t3 H23. 
+  inversion H23. 
+    rewrite <- H. apply H12.
+    apply aeq_app. apply IHH12'1; assumption. apply IHH12'2; assumption. 
+
+  intros t3 H23. 
+  inversion H23. rewrite <- H. assumption. 
+  apply aeq_abs. apply IHH12'. 
 
 (** Makes all bound variables in [rator] different from every free variable in 
  [rand], using the fact that variables are represented as numbers: the idea is 
