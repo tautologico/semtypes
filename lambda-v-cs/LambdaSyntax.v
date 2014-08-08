@@ -36,9 +36,9 @@ Notation "\ T \ x --> M" := (Abs (A := T) x M) (at level 60, right associativity
 Notation "M $ N" := (App M N) (at level 60, right associativity). 
 
 Inductive natconst : Type := 
-| NConst : nat -> natconst
-| Succ : nat -> natconst
-| Pred : nat -> natconst. 
+| Num : nat -> natconst
+| Succ : natconst
+| Pred : natconst. 
 
 Definition lambda_nat := term natconst. 
 
@@ -50,7 +50,8 @@ Definition Z := 2.
 
 (** Example terms in the natconst type: *)
 
-Definition natconst_term_1 : lambda_nat := Const (NConst 0). 
+Definition natconst_term_1 : lambda_nat := Const (Num 0). 
+Definition natconst_term_2 : lambda_nat := App (Const (Succ)) (Const (Num 3)). 
 
 (** Example terms in nat type: *)
 
@@ -257,6 +258,102 @@ Definition var_fresh2 {A : Type} (v : var) (t1 t2 : term A) : Prop :=
   forall v' : var, 
     set_In v' (set_union eq_nat_dec (variables t1) (variables t2)) -> v > v'. 
 
+(** A representation that's a variation of De Bruijn indices, avoiding the 
+  shifting of free variables. Shifting is only used to preserve the identity 
+  of free variables when under binders, but here we distinguish free and 
+  bound variables in a term explicitly. *)
+
+Module DeBruijnVar. 
+  Local Set Implicit Arguments. 
+
+  Inductive dbv_var : Set := 
+  | Free : nat -> dbv_var
+  | Bound : nat -> dbv_var. 
+
+  Inductive dbv_term (A : Type) : Type := 
+  | DBV_const : A -> dbv_term A
+  | DBV_var : dbv_var -> dbv_term A
+  | DBV_abs : dbv_term A -> dbv_term A
+  | DBV_app : dbv_term A -> dbv_term A -> dbv_term A.
+
+  Definition binders := list var.
+
+  Fixpoint find_var_in_binders (bs : binders) (v : var) (i : nat) : option nat := 
+    match bs with
+      | nil => None
+      | v' :: bs' => if beq_nat v v' then Some i 
+                     else find_var_in_binders bs' v (S i)
+    end.
+
+  Definition var_to_dbv_var (v : var) (bs : binders) : dbv_var := 
+    match find_var_in_binders bs v 0 with
+      | None => Free v
+      | Some i => Bound i
+    end. 
+
+  Fixpoint convert_to_dbv_aux {A : Type} (t : term A) (bs : binders) : dbv_term A := 
+    match t with
+      | Const a => DBV_const a
+      | Var v => DBV_var A (var_to_dbv_var v bs)
+      | Abs x body => DBV_abs (convert_to_dbv_aux body (x :: bs))
+      | App m n => DBV_app (convert_to_dbv_aux m bs) (convert_to_dbv_aux n bs)
+    end. 
+
+  Definition convert_to_dbv {A : Type} (t : term A) : dbv_term A := 
+    convert_to_dbv_aux t nil. 
+
+  Example dbv_conv_ex1 : 
+    convert_to_dbv (\nat\X --> Var X) = (DBV_abs (DBV_var nat (Bound 0))).
+  Proof. reflexivity. Qed. 
+
+  Example dbv_conv_ex2 : 
+    convert_to_dbv (\nat\X --> (Var X) $ (Var Y)) = 
+    (DBV_abs (DBV_app (DBV_var nat (Bound 0)) (DBV_var nat (Free 1)))).
+  Proof. reflexivity. Qed. 
+
+  Example dbv_conv_ex3 : 
+    convert_to_dbv (\nat\Y --> Var Y) = (DBV_abs (DBV_var nat (Bound 0))).
+  Proof. reflexivity. Qed. 
+
+  Example dbv_conv_ex4 : 
+    convert_to_dbv (\nat\Y --> (Var Y) $ (Var Z)) = 
+    (DBV_abs (DBV_app (DBV_var nat (Bound 0)) (DBV_var nat (Free Z)))).
+  Proof. reflexivity. Qed. 
+
+End DeBruijnVar. 
+
+Import DeBruijnVar. 
+
+(** We define alpha equivalence (equivalence of terms up to names of bound variables) 
+    by translating terms to our variation of De Bruijn representation and checking if 
+    they're equal. *)
+
+Definition alpha_equiv {A : Type} (t1 t2 : term A) : Prop := 
+  convert_to_dbv t1 = convert_to_dbv t2. 
+
+(** printing == %\ensuremath{\equiv}% *)
+
+Notation "t1 == t2" := (alpha_equiv t1 t2) (at level 20, no associativity). 
+
+
+Theorem alpha_equiv_refl : forall (A : Type) (t : term A), t == t. 
+Proof. 
+  reflexivity. 
+Qed. 
+
+Theorem alpha_equiv_sym : forall (A : Type) (t1 t2 : term A), 
+                            t1 == t2 -> t2 == t1. 
+Proof. 
+  intros A t1 t2 H12; unfold alpha_equiv in H12; apply eq_sym in H12; assumption. 
+Qed. 
+
+Theorem alpha_equiv_trans : forall (A : Type) (t1 t2 t3 : term A),
+                              t1 == t2 -> t2 == t3 -> t1 == t3. 
+Proof. 
+  intros A t1 t2 t3 H12 H23. 
+  unfold alpha_equiv in H12. unfold alpha_equiv in H23. rewrite H23 in H12. assumption. 
+Qed. 
+
 Inductive aequiv {A : Type} : var -> term A -> term A -> Prop := 
 | ae_const : forall v a b, a = b -> aequiv v (Const a) (Const b)
 | ae_var : forall v x y, x = y -> aequiv v (Var x) (Var y)
@@ -309,56 +406,6 @@ Proof.
       apply ae_abs_sv. apply IHaequiv; assumption. 
       apply ae_abs. admit. assumption. 
     
-
-Inductive alpha_equiv {A : Type} : term A -> term A -> Prop := 
-| aeq_eq : forall t1 t2, t1 = t2 -> alpha_equiv t1 t2 
-| aeq_const : forall a b, a = b -> alpha_equiv (Const a) (Const b)
-| aeq_var : forall x y, x = y -> alpha_equiv (Var x) (Var y)
-| aeq_app : forall m1 m2 n1 n2 : term A, alpha_equiv m1 m2 -> alpha_equiv n1 n2 -> 
-                                         alpha_equiv (App m1 n1) (App m2 n2)
-| aeq_abs : forall x1 x2 b1 b2, 
-              alpha_equiv (alpha_convert b1 x1 (fresh_variable2 (Abs x1 b1) (Abs x2 b2)))
-                          (alpha_convert b2 x2 (fresh_variable2 (Abs x1 b1) (Abs x2 b2))) -> 
-              alpha_equiv (Abs x1 b1) (Abs x2 b2). 
-
-Theorem aeq_refl : forall (A : Type) (t : term A), alpha_equiv t t. 
-Proof. 
-  intros. apply aeq_eq; reflexivity. 
-  (* 
-  intros. induction t. 
-  apply aeq_var. apply eq_refl. 
-  apply aeq_const. apply eq_refl. 
-  apply aeq_abs. 
-   *)
-Qed. 
-
-Theorem aeq_symm : forall (A : Type) (t1 t2 : term A), 
-                     alpha_equiv t1 t2 -> alpha_equiv t2 t1.
-Proof. 
-  intros. induction H. 
-  rewrite H. apply aeq_eq; apply eq_refl. 
-  apply aeq_const; apply eq_sym; assumption. 
-  apply aeq_var; apply eq_sym; assumption. 
-  apply aeq_app. apply IHalpha_equiv1. apply IHalpha_equiv2. 
-  apply aeq_abs. rewrite fresh2_sym. apply IHalpha_equiv. 
-Qed. 
-
-Theorem aeq_trans : forall (A : Type) (t1 t2 t3 : term A),
-                      alpha_equiv t1 t2 -> alpha_equiv t2 t3 -> 
-                      alpha_equiv t1 t3. 
-Proof. 
-  intros A t1 t2 t3 H12 H23. generalize dependent t3. 
-  assert (H12' : alpha_equiv t1 t2). assumption. 
-  induction H12'; try (intros t3 H23; rewrite H; assumption).  
-
-  intros t3 H23. 
-  inversion H23. 
-    rewrite <- H. apply H12.
-    apply aeq_app. apply IHH12'1; assumption. apply IHH12'2; assumption. 
-
-  intros t3 H23. 
-  inversion H23. rewrite <- H. assumption. 
-  apply aeq_abs. apply IHH12'. 
 
 (** Makes all bound variables in [rator] different from every free variable in 
  [rand], using the fact that variables are represented as numbers: the idea is 
