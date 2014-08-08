@@ -32,8 +32,12 @@ Arguments App [A] _ _.
     case when the type argument cannot be inferred automatically. *)
 
 Notation "\ x --> M" := (Abs x M) (at level 60, right associativity). 
-Notation "\ T \ x --> M" := (Abs (A := T) x M) (at level 60, right associativity).
+Notation "\ x # T --> M" := (Abs (A := T) x M) (at level 60, right associativity).
 Notation "M $ N" := (App M N) (at level 60, right associativity). 
+
+(** printing \ %\ensuremath{\lambda}% *)
+(** printing --> %\ensuremath{.}% *)
+(** printing # %\ensuremath{:}% *)
 
 Inductive natconst : Type := 
 | Num : nat -> natconst
@@ -58,7 +62,7 @@ Definition natconst_term_2 : lambda_nat := App (Const (Succ)) (Const (Num 3)).
 Definition nat_term_1 := Const 0. 
 Definition nat_term_2 := \X --> nat_term_1. 
 Definition nat_term_3 := Var (A := nat) X. 
-Definition nat_term_4 := \nat\X --> (Var X). 
+Definition nat_term_4 := \X#nat --> (Var X). 
 
 Fixpoint freevars {A : Type} (t : term A) : set var := 
   match t with
@@ -301,20 +305,20 @@ Module DeBruijnVar.
     convert_to_dbv_aux t nil. 
 
   Example dbv_conv_ex1 : 
-    convert_to_dbv (\nat\X --> Var X) = (DBV_abs (DBV_var nat (Bound 0))).
+    convert_to_dbv (\X # nat --> Var X) = (DBV_abs (DBV_var nat (Bound 0))).
   Proof. reflexivity. Qed. 
 
   Example dbv_conv_ex2 : 
-    convert_to_dbv (\nat\X --> (Var X) $ (Var Y)) = 
+    convert_to_dbv (\X # nat --> (Var X) $ (Var Y)) = 
     (DBV_abs (DBV_app (DBV_var nat (Bound 0)) (DBV_var nat (Free 1)))).
   Proof. reflexivity. Qed. 
 
   Example dbv_conv_ex3 : 
-    convert_to_dbv (\nat\Y --> Var Y) = (DBV_abs (DBV_var nat (Bound 0))).
+    convert_to_dbv (\Y # nat --> Var Y) = (DBV_abs (DBV_var nat (Bound 0))).
   Proof. reflexivity. Qed. 
 
   Example dbv_conv_ex4 : 
-    convert_to_dbv (\nat\Y --> (Var Y) $ (Var Z)) = 
+    convert_to_dbv (\Y # nat --> (Var Y) $ (Var Z)) = 
     (DBV_abs (DBV_app (DBV_var nat (Bound 0)) (DBV_var nat (Free Z)))).
   Proof. reflexivity. Qed. 
 
@@ -331,8 +335,12 @@ Definition alpha_equiv {A : Type} (t1 t2 : term A) : Prop :=
 
 (** printing == %\ensuremath{\equiv}% *)
 
-Notation "t1 == t2" := (alpha_equiv t1 t2) (at level 20, no associativity). 
+(** If [t1] and [t2] are terms, we note equivalence up to names of bound 
+ variables as [t1 == t2]. This is an equivalence relation. *)
 
+(* begin hide *)
+Notation "t1 == t2" := (alpha_equiv t1 t2) (at level 20, no associativity). 
+(* end hide *)
 
 Theorem alpha_equiv_refl : forall (A : Type) (t : term A), t == t. 
 Proof. 
@@ -425,7 +433,7 @@ Example subst_ex_1 : (Var (A := nat) X)[X :-> Var Y][Y :-> Var Z] = Var Z.
 Proof. reflexivity. Qed. 
 
 Example subst_ex_2 : 
-  (\nat\Y --> Var X $ Var Y)[X :-> \Z --> Var Y] <> 
+  (\Y # nat --> Var X $ Var Y)[X :-> \Z --> Var Y] <> 
   (\Y --> (\Z --> Var Y) $ Var Y). 
 Proof. discriminate 1. Qed. 
 
