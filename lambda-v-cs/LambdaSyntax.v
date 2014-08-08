@@ -235,12 +235,10 @@ Fixpoint assoc_var (l : list (var * var)) (v : var) : option var :=
     | (v1, v2) :: rl => if beq_nat v v1 then Some v2 else assoc_var rl v
   end.
 
-Import ListNotations. 
-
-Example assoc_var_1 : assoc_var [(1, 5); (2, 7); (11, 8)] 3 = None. 
+Example assoc_var_1 : assoc_var ((1, 5)::(2, 7)::(11, 8) :: nil) 3 = None. 
 Proof. reflexivity. Qed. 
 
-Example assoc_var_2 : assoc_var [(1, 5); (2, 7); (11, 8)] 2 = Some 7. 
+Example assoc_var_2 : assoc_var ((1, 5)::(2, 7)::(11, 8) :: nil) 2 = Some 7. 
 Proof. reflexivity. Qed. 
 
 Fixpoint sub_var (ls : list (var * var)) (v : var) : var := 
@@ -354,6 +352,7 @@ Proof.
   unfold alpha_equiv in H12. unfold alpha_equiv in H23. rewrite H23 in H12. assumption. 
 Qed. 
 
+(*
 Inductive aequiv {A : Type} : var -> term A -> term A -> Prop := 
 | ae_const : forall v a b, a = b -> aequiv v (Const a) (Const b)
 | ae_var : forall v x y, x = y -> aequiv v (Var x) (Var y)
@@ -405,7 +404,7 @@ Proof.
     intros. inversion H23. 
       apply ae_abs_sv. apply IHaequiv; assumption. 
       apply ae_abs. admit. assumption. 
-    
+*)    
 
 (** Makes all bound variables in [rator] different from every free variable in 
  [rand], using the fact that variables are represented as numbers: the idea is 
@@ -418,13 +417,15 @@ Definition freshen_boundvars {A : Type} (rator rand : term A) : term A :=
 Definition subst {A : Type} (orig : term A) (v : var) (t : term A) : term A := 
   subst_aux (freshen_boundvars orig t) v t. 
 
-Notation "M [ x := N ]" := (subst M x N) (at level 50, left associativity).
+(** printing :-> %\ensuremath{\mapsto}% *)
 
-Example subst_ex_1 : (Var (A := nat) X)[X := Var Y][Y := Var Z] = Var Z. 
+Notation "M [ x :-> N ]" := (subst M x N) (at level 50, left associativity).
+
+Example subst_ex_1 : (Var (A := nat) X)[X :-> Var Y][Y :-> Var Z] = Var Z. 
 Proof. reflexivity. Qed. 
 
 Example subst_ex_2 : 
-  (\nat\Y --> Var X $ Var Y)[X := \Z --> Var Y] <> 
+  (\nat\Y --> Var X $ Var Y)[X :-> \Z --> Var Y] <> 
   (\Y --> (\Z --> Var Y) $ Var Y). 
 Proof. discriminate 1. Qed. 
 
@@ -583,6 +584,8 @@ Import ListNotations.
 *)
 
 (* Substitution lemma for [subst_aux] *)
+
+(* 
 Lemma subst_aux_lemma : forall (A : Type) x y (M N L : term A), 
                              x <> y -> ~(set_In x (freevars L)) ->
                              set_inter eq_nat_dec (boundvars M) (freevars N) = empty_set nat ->
@@ -626,3 +629,5 @@ Proof.
   induction M. 
   destruct (eq_nat_dec v x). rewrite e. 
   Admitted. 
+*)
+
