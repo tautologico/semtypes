@@ -221,13 +221,14 @@ Fixpoint subst_aux {A : Type} (orig : term A) (v : var) (t : term A) : term A :=
 (** Substitute [t] for [v] in term [orig], alpha-converting bound variables to 
     a fresh variable not present in [t] or [orig]. *)
 
-Fixpoint subst_fresh {A : Type} (orig : term A) (v : var) (t : term A) : term A := 
+Fixpoint subst_fresh {A : Type} (orig : term A) (v : var) (t : term A) {struct orig} : term A := 
   match orig with
     | Const _ => orig
-    | Var x => if beq_nat x v then t else orig
+    | Var x => if eq_nat_dec x v then t else orig
     | Abs x body => if eq_nat_dec x v then orig 
-                    else let v' := fresh_variable2 orig t in 
-                         Abs v' (alpha_convert body v v')
+                    else let x' := fresh_variable2 orig t in 
+                         let b' := alpha_convert body x x' in
+                         subst_fresh (Abs x' b') v t
     | App m n => App (subst_fresh m v t) (subst_fresh n v t)
   end.
 
@@ -360,59 +361,87 @@ Proof.
   unfold alpha_equiv in H12. unfold alpha_equiv in H23. rewrite H23 in H12. assumption. 
 Qed. 
 
-(*
-Inductive aequiv {A : Type} : var -> term A -> term A -> Prop := 
-| ae_const : forall v a b, a = b -> aequiv v (Const a) (Const b)
-| ae_var : forall v x y, x = y -> aequiv v (Var x) (Var y)
-| ae_app : forall v m1 m2 n1 n2, aequiv v m1 m2 -> aequiv v n1 n2 -> 
-                                 aequiv v (App m1 n1) (App m2 n2)
-| ae_abs_sv : forall v x b1 b2, aequiv v b1 b2 -> aequiv v (Abs x b1) (Abs x b2)
-| ae_abs : forall v x1 x2 b1 b2, 
-             var_fresh v b1 -> var_fresh v b2 -> 
-             aequiv (next_var v) (alpha_convert b1 x1 v) (alpha_convert b2 x2 v) -> 
-             aequiv v (Abs x1 b1) (Abs x2 b2).
-
-Definition alpha_eq {A : Type} (t1 t2 : term A) : Prop := 
-  aequiv (fresh_variable2 t1 t2) t1 t2. 
-
-Theorem aequiv_refl : forall (A : Type) (v : var) (t : term A), aequiv v t t. 
+Theorem equal_alpha_eq : forall (A : Type) (t1 t2 : term A),
+                                t1 = t2 -> t1 == t2. 
 Proof. 
-  intros A v t. 
-  induction t; constructor; try reflexivity; try assumption. 
+  intros A t1 t2 Heq. rewrite Heq. apply alpha_equiv_refl. 
 Qed. 
 
-Theorem alpha_eq_refl : forall (A : Type) (t : term A), alpha_eq t t. 
+(** Substitution lemma for subst_fresh, using alpha equivalence. *)
+
+Lemma subst_fresh_same_var : forall (A : Type) x (M : term A),
+                               subst_fresh (Var x) x M = M. 
 Proof. 
-  intros; apply aequiv_refl. 
+  intros; simpl; destruct (eq_nat_dec x x); congruence. 
 Qed. 
 
-Theorem aequiv_sym : forall (A : Type) (v : var) (t1 t2 : term A), 
-                       aequiv v t1 t2 -> aequiv v t2 t1. 
+Lemma subst_aux_diff_var : forall (A : Type) x y (M : term A),
+                             x <> y -> subst_fresh (Var x) y M = Var x. 
 Proof. 
-  intros A v t1 t2 H12. 
-  induction H12; constructor; try apply eq_sym; assumption. 
+  intros A x y M H. 
+  simpl. destruct (eq_nat_dec x y); contra_equality. 
+  reflexivity. 
 Qed. 
 
-Theorem alpha_eq_sym : forall (A : Type) (t1 t2 : term A),
-                         alpha_eq t1 t2 -> alpha_eq t2 t1. 
+Lemma not_in_set_then_diff : forall (A : Type) x v (M : term A),
+                               M = Var v -> ~(set_In x (freevars M)) ->
+                               v <> x.
 Proof. 
-  intros. apply aequiv_sym. rewrite fresh2_sym. assumption. 
+  intros A x v M Hm Hnotin. 
+  rewrite -> Hm in Hnotin. simpl in Hnotin. intuition. 
 Qed. 
 
-Theorem aequiv_trans : forall (A : Type) (v : var) (t1 t2 t3 : term A),
-                         aequiv v t1 t2 -> aequiv v t2 t3 -> aequiv v t1 t3. 
+Lemma not_free_abs_not_free : forall (A : Type) x v (M : term A),
+                                x <> v -> 
+                                ~(set_In x (freevars (\v --> M))) ->
+                                ~(set_In x (freevars M)).
+Proof.
+  intros A x v M Hneq Hnin. simpl in Hnin. 
+  apply not_in_remove_not_in_set with (y := v) (Aeq_dec := eq_nat_dec); assumption. 
+Qed. 
+
+Lemma subst_non_free : forall (A : Type) x (M N : term A),
+                         ~(set_In x (freevars M)) -> 
+                         subst_fresh M x N == M. 
 Proof. 
-  intros A v t1 t2 t3 H12 H23. generalize dependent t3.  
-  assert (H12' : aequiv v t1 t2). assumption. 
-  induction H12. 
-    intros; rewrite H; assumption.
-    intros; rewrite H; assumption. 
-    intros. inversion H23. 
-      apply ae_app; [ apply IHaequiv1 | apply IHaequiv2 ]; assumption. 
-    intros. inversion H23. 
-      apply ae_abs_sv. apply IHaequiv; assumption. 
-      apply ae_abs. admit. assumption. 
-*)    
+  intros A x M N H. induction M. 
+
+  (* Case M = Var v *)
+  apply not_in_set_then_diff with (v := v) in H. 
+  apply equal_alpha_eq. apply subst_aux_diff_var. assumption. reflexivity. 
+
+  (* Case M = Const _ *) apply equal_alpha_eq. reflexivity. 
+
+  (* Case M = Abs v M *)
+  simpl.
+  destruct (eq_nat_dec v x). reflexivity. f_equal. apply IHM. 
+  apply not_free_abs_not_free with (v := v). apply (not_eq_sym n). assumption. 
+
+  (* Case M = App M1 M2 *)
+  simpl in H. 
+  simpl; f_equal; 
+    [ apply IHM1 | apply IHM2 ]; intro Hcontra;  apply H; 
+    [ apply set_union_intro1 | apply set_union_intro2 ]; apply Hcontra. 
+Qed. 
+
+Theorem subst_fresh_lemma : 
+  forall (A : Type) x y (M N L : term A),
+    x <> y -> ~(set_In x (freevars L)) -> 
+    subst_fresh (subst_fresh M x N) y L == 
+    subst_fresh (subst_fresh M y L) x (subst_fresh N y L).
+Proof. 
+  intros A x y M N L Hneq Hnfree.
+  induction M. 
+
+  (* Case M = Var v *)
+  simpl. destruct (eq_nat_dec v x). 
+    (* Case v = x *)
+    rewrite e. destruct (eq_nat_dec x y); contra_equality. 
+    rewrite subst_fresh_same_var. reflexivity. 
+    (* Case v <> x *)
+    destruct (eq_nat_dec v y). 
+      (* Case v = y *)
+      rewrite e. rewrite subst_fresh_same_var. 
 
 (** Makes all bound variables in [rator] different from every free variable in 
  [rand], using the fact that variables are represented as numbers: the idea is 
@@ -451,14 +480,6 @@ Lemma subst_aux_same_var : forall (A : Type) x (M : term A),
                              subst_aux (Var x) x M = M. 
 Proof. 
   intros A x M. simpl. rewrite <- beq_nat_refl. reflexivity. 
-Qed. 
-
-Lemma not_in_set_then_diff : forall (A : Type) x v (M : term A),
-                               M = Var v -> ~(set_In x (freevars M)) ->
-                               v <> x.
-Proof. 
-  intros A x v M Hm Hnotin. 
-  rewrite -> Hm in Hnotin. simpl in Hnotin. intuition. 
 Qed. 
   
 Lemma not_free_abs_not_free : forall (A : Type) x v (M : term A),
