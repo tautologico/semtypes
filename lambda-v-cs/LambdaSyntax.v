@@ -1,9 +1,10 @@
 
-Require Import Arith.
+Require Export Tactics. 
+Require Export Arith.
 Require Import List. 
 Require Import ListSet. 
 Require Import SetUtil. 
-Require Import Tactics. 
+
 
 (** * The $\Lambda$ #Lambda# language 
 

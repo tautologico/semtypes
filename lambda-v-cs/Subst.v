@@ -1,3 +1,7 @@
+
+Require Import List. 
+Require Import ListSet. 
+Require Import SetUtil. 
 Require Import LambdaSyntax.
 Require Import DBVar. 
 Require Import Alpha. 

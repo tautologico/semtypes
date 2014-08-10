@@ -1,10 +1,13 @@
 
+Require Import List. 
 Require Import LambdaSyntax. 
 
 (** A representation that's a variation of De Bruijn indices, avoiding the 
   shifting of free variables. Shifting is only used to preserve the identity 
   of free variables when under binders, but here we distinguish free and 
   bound variables in a term explicitly. *)
+
+Set Implicit Arguments. 
 
 Inductive dbv_var : Set := 
 | Free : nat -> dbv_var
