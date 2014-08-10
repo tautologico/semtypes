@@ -221,6 +221,47 @@ Fixpoint subst_aux {A : Type} (orig : term A) (v : var) (t : term A) : term A :=
 (** Substitute [t] for [v] in term [orig], alpha-converting bound variables to 
     a fresh variable not present in [t] or [orig]. *)
 
+Fixpoint subst_fresh_l {A : Type} (l : nat) (orig : term A) (v : var) (t : term A) : term A := 
+  match l with
+    | 0 => orig
+    | S l' => 
+      match orig with
+        | Const _ => orig
+        | Var x => if eq_nat_dec x v then t else orig
+        | Abs x body => if eq_nat_dec x v then orig
+                        else let x' := fresh_variable2 orig t in
+                             let b' := alpha_convert body x x' in
+                             subst_fresh_l l' (Abs x' b') v t
+        | App m n => App (subst_fresh_l l' m v t) (subst_fresh_l l' n v t)
+      end
+  end.
+
+Fixpoint term_depth {A : Type} (t : term A) : nat := 
+  match t with
+    | Const _ => 0
+    | Var _ => 0
+    | Abs x body => S (term_depth body)
+    | App m n => S (max (term_depth m) (term_depth n))
+  end.
+
+Definition subst_f {A : Type} (orig : term A) (v : var) (t : term A) : term A := 
+  subst_fresh_l (S (term_depth orig)) orig v t. 
+
+Lemma subst_fresh_l_same_var : forall (A : Type) x n (M : term A),
+                               subst_fresh_l (S n) (Var x) x M = M. 
+Proof. 
+  intros; simpl; destruct (eq_nat_dec x x); congruence. 
+Qed. 
+
+Lemma subst_fresh_l_diff_var : forall (A : Type) x y n (M : term A),
+                             x <> y -> subst_fresh_l n (Var x) y M = Var x. 
+Proof. 
+  intros A x y n M H. destruct n. reflexivity. 
+  simpl. destruct (eq_nat_dec x y); contra_equality. 
+  reflexivity. 
+Qed. 
+
+(* 
 Fixpoint subst_fresh {A : Type} (orig : term A) (v : var) (t : term A) {struct orig} : term A := 
   match orig with
     | Const _ => orig
@@ -229,6 +270,18 @@ Fixpoint subst_fresh {A : Type} (orig : term A) (v : var) (t : term A) {struct o
                     else let x' := fresh_variable2 orig t in 
                          let b' := alpha_convert body x x' in
                          subst_fresh (Abs x' b') v t
+    | App m n => App (subst_fresh m v t) (subst_fresh n v t)
+  end.
+*)
+
+Fixpoint subst_fresh {A : Type} (orig : term A) (v : var) (t : term A) {struct orig} : term A := 
+  match orig with
+    | Const _ => orig
+    | Var x => if eq_nat_dec x v then t else orig
+    | Abs x body => if eq_nat_dec x v then orig 
+                    else let x' := fresh_variable2 orig t in 
+                         let b' := alpha_convert body x x' in
+                         (Abs x' b')
     | App m n => App (subst_fresh m v t) (subst_fresh n v t)
   end.
 
@@ -375,7 +428,7 @@ Proof.
   intros; simpl; destruct (eq_nat_dec x x); congruence. 
 Qed. 
 
-Lemma subst_aux_diff_var : forall (A : Type) x y (M : term A),
+Lemma subst_fresh_diff_var : forall (A : Type) x y (M : term A),
                              x <> y -> subst_fresh (Var x) y M = Var x. 
 Proof. 
   intros A x y M H. 
@@ -400,6 +453,7 @@ Proof.
   apply not_in_remove_not_in_set with (y := v) (Aeq_dec := eq_nat_dec); assumption. 
 Qed. 
 
+(* 
 Lemma subst_non_free : forall (A : Type) x (M N : term A),
                          ~(set_In x (freevars M)) -> 
                          subst_fresh M x N == M. 
@@ -442,6 +496,7 @@ Proof.
     destruct (eq_nat_dec v y). 
       (* Case v = y *)
       rewrite e. rewrite subst_fresh_same_var. 
+*)
 
 (** Makes all bound variables in [rator] different from every free variable in 
  [rand], using the fact that variables are represented as numbers: the idea is 
@@ -480,15 +535,6 @@ Lemma subst_aux_same_var : forall (A : Type) x (M : term A),
                              subst_aux (Var x) x M = M. 
 Proof. 
   intros A x M. simpl. rewrite <- beq_nat_refl. reflexivity. 
-Qed. 
-  
-Lemma not_free_abs_not_free : forall (A : Type) x v (M : term A),
-                                x <> v -> 
-                                ~(set_In x (freevars (\v --> M))) ->
-                                ~(set_In x (freevars M)).
-Proof.
-  intros A x v M Hneq Hnin. simpl in Hnin. 
-  apply not_in_remove_not_in_set with (y := v) (Aeq_dec := eq_nat_dec); assumption. 
 Qed. 
 
 Lemma subst_non_free : forall (A : Type) x (M N : term A),
