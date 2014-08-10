@@ -19,6 +19,13 @@ Inductive dbv_term (A : Type) : Type :=
 | DBV_abs : dbv_term A -> dbv_term A
 | DBV_app : dbv_term A -> dbv_term A -> dbv_term A.
 
+Notation "\\ M" := (DBV_abs M) (at level 60, right associativity). 
+Notation "M $$ N" := (DBV_app M N) (at level 60, right associativity). 
+Notation "[ v ]" := (DBV_var (Free v)) (at level 40, no associativity). 
+Notation "[ v # T ]" := (DBV_var T (Free v)) (at level 40, no associativity). 
+Notation "[| v |]" := (DBV_var (Bound v)) (at level 40, no associativity). 
+Notation "[| v # T |]" := (DBV_var T (Bound v)) (at level 40, no associativity). 
+
 Definition binders := list var.
 
 Fixpoint find_var_in_binders (bs : binders) (v : var) (i : nat) : option nat := 
@@ -46,12 +53,12 @@ Definition convert_to_dbv {A : Type} (t : term A) : dbv_term A :=
   convert_to_dbv_aux t nil. 
 
 Example dbv_conv_ex1 : 
-  convert_to_dbv (\X # nat --> Var X) = (DBV_abs (DBV_var nat (Bound 0))).
+  convert_to_dbv (\X # nat --> Var X) = (\\ (DBV_var nat (Bound 0))).
 Proof. reflexivity. Qed. 
 
 Example dbv_conv_ex2 : 
   convert_to_dbv (\X # nat --> (Var X) $ (Var Y)) = 
-  (DBV_abs (DBV_app (DBV_var nat (Bound 0)) (DBV_var nat (Free 1)))).
+  \\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Free 1))).
 Proof. reflexivity. Qed. 
 
 Example dbv_conv_ex3 : 
@@ -63,3 +70,43 @@ Example dbv_conv_ex4 :
   (DBV_abs (DBV_app (DBV_var nat (Bound 0)) (DBV_var nat (Free Z)))).
 Proof. reflexivity. Qed. 
 
+Fixpoint dbv_var_to_var (ix : nat) (bs : binders) : var :=
+  match ix, bs with
+    | 0, v :: bs' => v
+    | S i, v :: bs' => dbv_var_to_var i bs'
+    | _, _ => 666
+  end. 
+
+Fixpoint dbv_to_term_aux {A : Type} (dt : dbv_term A) (bs : binders) (v : var) : term A := 
+  match dt with
+    | DBV_const c => Const c
+    | DBV_var (Free n) => Var n
+    | DBV_var (Bound n) => Var (dbv_var_to_var n bs)
+    | DBV_abs body => Abs v (dbv_to_term_aux body (v :: bs) (S v))
+    | DBV_app m n => App (dbv_to_term_aux m bs v) (dbv_to_term_aux n bs v)
+  end. 
+
+Fixpoint max_free_var {A : Type} (dt : dbv_term A) : nat := 
+  match dt with
+    | DBV_const _ => 0
+    | DBV_var (Bound _) => 0
+    | DBV_var (Free n) => n
+    | DBV_abs body => max_free_var body
+    | DBV_app m n => max (max_free_var m) (max_free_var n)
+  end. 
+
+Definition dbv_to_term {A : Type} (dt : dbv_term A) : term A := 
+  dbv_to_term_aux dt nil (S (max_free_var dt)). 
+
+Example dbv_to_term_1 : dbv_to_term (\\ (DBV_var nat (Bound 0))) = (Abs 1 (Var 1)).
+Proof. reflexivity. Qed. 
+
+Example dbv_to_term_2 : 
+  dbv_to_term (\\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Free Z)))) = 
+  (\3 --> (Var 3) $ (Var Z)). 
+Proof. reflexivity. Qed. 
+
+Example dbv_to_term_3 : 
+  dbv_to_term (\\ (\\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Bound 1))))) =
+  \1 --> \2 --> Var 2 $ Var 1. 
+Proof. reflexivity. Qed. 
