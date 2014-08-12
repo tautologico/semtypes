@@ -41,32 +41,32 @@ Definition var_to_dbv_var (v : var) (bs : binders) : dbv_var :=
     | Some i => Bound i
   end. 
 
-Fixpoint convert_to_dbv_aux {A : Type} (t : term A) (bs : binders) : dbv_term A := 
+Fixpoint term_to_dbv_aux {A : Type} (t : term A) (bs : binders) : dbv_term A := 
   match t with
     | Const a => DBV_const a
     | Var v => DBV_var A (var_to_dbv_var v bs)
-    | Abs x body => DBV_abs (convert_to_dbv_aux body (x :: bs))
-    | App m n => DBV_app (convert_to_dbv_aux m bs) (convert_to_dbv_aux n bs)
+    | Abs x body => DBV_abs (term_to_dbv_aux body (x :: bs))
+    | App m n => DBV_app (term_to_dbv_aux m bs) (term_to_dbv_aux n bs)
   end. 
 
-Definition convert_to_dbv {A : Type} (t : term A) : dbv_term A := 
-  convert_to_dbv_aux t nil. 
+Definition term_to_dbv {A : Type} (t : term A) : dbv_term A := 
+  term_to_dbv_aux t nil. 
 
 Example dbv_conv_ex1 : 
-  convert_to_dbv (\X # nat --> Var X) = (\\ (DBV_var nat (Bound 0))).
+  term_to_dbv (\X # nat --> Var X) = (\\ (DBV_var nat (Bound 0))).
 Proof. reflexivity. Qed. 
 
 Example dbv_conv_ex2 : 
-  convert_to_dbv (\X # nat --> (Var X) $ (Var Y)) = 
+  term_to_dbv (\X # nat --> (Var X) $ (Var Y)) = 
   \\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Free 1))).
 Proof. reflexivity. Qed. 
 
 Example dbv_conv_ex3 : 
-  convert_to_dbv (\Y # nat --> Var Y) = (DBV_abs (DBV_var nat (Bound 0))).
+  term_to_dbv (\Y # nat --> Var Y) = (DBV_abs (DBV_var nat (Bound 0))).
 Proof. reflexivity. Qed. 
 
 Example dbv_conv_ex4 : 
-  convert_to_dbv (\Y # nat --> (Var Y) $ (Var Z)) = 
+  term_to_dbv (\Y # nat --> (Var Y) $ (Var Z)) = 
   (DBV_abs (DBV_app (DBV_var nat (Bound 0)) (DBV_var nat (Free Z)))).
 Proof. reflexivity. Qed. 
 
@@ -110,3 +110,22 @@ Example dbv_to_term_3 :
   dbv_to_term (\\ (\\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Bound 1))))) =
   \1 --> \2 --> Var 2 $ Var 1. 
 Proof. reflexivity. Qed. 
+
+(** Verifying if a DBV term is well-formed.  *)
+
+Fixpoint well_formed_aux {A : Type} (dt : dbv_term A) (b : nat) : bool := 
+  match dt with
+    | DBV_const _ => true
+    | DBV_var (Free _) => true
+    | DBV_var (Bound n) => leb (S n) b
+    | DBV_abs body => well_formed_aux body (S b)
+    | DBV_app m n => andb (well_formed_aux m b) (well_formed_aux n b)
+  end. 
+
+Lemma well_formed_var : forall (A : Type) (v n : nat),
+                          well_formed_aux (DBV_var A (Bound v)) n = true -> 
+                          v < n.
+Proof. 
+  intros A v n H. 
+  simpl in H. destruct n. inversion H. apply le_lt_n_Sm. apply leb_complete. assumption. 
+Qed. 

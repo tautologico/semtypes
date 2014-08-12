@@ -21,7 +21,7 @@ Proof. reflexivity. Qed.
     they're equal. *)
 
 Definition alpha_equiv {A : Type} (t1 t2 : term A) : Prop := 
-  convert_to_dbv t1 = convert_to_dbv t2. 
+  term_to_dbv t1 = term_to_dbv t2. 
 
 (** printing == %\ensuremath{\equiv}% *)
 
