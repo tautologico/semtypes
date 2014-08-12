@@ -86,6 +86,15 @@ Fixpoint dbv_to_term_aux {A : Type} (dt : dbv_term A) (bs : binders) (v : var) :
     | DBV_app m n => App (dbv_to_term_aux m bs v) (dbv_to_term_aux n bs v)
   end. 
 
+Fixpoint dbv_to_term_aux_2 {A : Type} (dt : dbv_term A) (i v : var) : term A := 
+  match dt with
+    | DBV_const c => Const c
+    | DBV_var (Free n) => Var n
+    | DBV_var (Bound n) => Var (v + i - n)
+    | DBV_abs body => Abs (v + (S i)) (dbv_to_term_aux_2 body (S i) v)
+    | DBV_app m n => App (dbv_to_term_aux_2 m i v) (dbv_to_term_aux_2 n i v)
+  end. 
+
 Fixpoint max_free_var {A : Type} (dt : dbv_term A) : nat := 
   match dt with
     | DBV_const _ => 0
@@ -101,13 +110,26 @@ Definition dbv_to_term {A : Type} (dt : dbv_term A) : term A :=
 Example dbv_to_term_1 : dbv_to_term (\\ (DBV_var nat (Bound 0))) = (Abs 1 (Var 1)).
 Proof. reflexivity. Qed. 
 
+Example dbv_to_term2_1 : dbv_to_term_aux_2 (\\ (DBV_var nat (Bound 0))) 0 0 = (Abs 1 (Var 1)). 
+Proof. reflexivity. Qed. 
+
 Example dbv_to_term_2 : 
   dbv_to_term (\\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Free Z)))) = 
   (\3 --> (Var 3) $ (Var Z)). 
 Proof. reflexivity. Qed. 
 
+Example dbv_to_term2_2 : 
+  dbv_to_term_aux_2 (\\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Free Z)))) 0 2 = 
+  (\3 --> (Var 3) $ (Var Z)). 
+Proof. reflexivity. Qed. 
+
 Example dbv_to_term_3 : 
   dbv_to_term (\\ (\\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Bound 1))))) =
+  \1 --> \2 --> Var 2 $ Var 1. 
+Proof. reflexivity. Qed. 
+
+Example dbv_to_term2_3 : 
+  dbv_to_term_aux_2 (\\ (\\ ((DBV_var nat (Bound 0)) $$ (DBV_var nat (Bound 1))))) 0 0 =
   \1 --> \2 --> Var 2 $ Var 1. 
 Proof. reflexivity. Qed. 
 
@@ -129,3 +151,17 @@ Proof.
   intros A v n H. 
   simpl in H. destruct n. inversion H. apply le_lt_n_Sm. apply leb_complete. assumption. 
 Qed. 
+
+
+Theorem dbv_to_from : forall (A : Type) (dt : dbv_term A) (v : var),
+                        v > (max_free_var dt) -> well_formed_aux dt 0 = true -> 
+                        term_to_dbv_aux (dbv_to_term_aux_2 dt 0 v) nil = dt. 
+Proof. 
+  intros A dt v Hgt Hwf. 
+  induction dt. 
+
+  reflexivity. simpl. destruct d. reflexivity. 
+  assert (Hcontra: well_formed_aux ([| n # A |]) 0 = false). 
+  reflexivity. congruence. 
+
+  simpl. f_equal.
