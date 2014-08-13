@@ -152,7 +152,7 @@ Proof.
   simpl in H. destruct n. inversion H. apply le_lt_n_Sm. apply leb_complete. assumption. 
 Qed. 
 
-
+(*
 Theorem dbv_to_from : forall (A : Type) (dt : dbv_term A) (v : var),
                         v > (max_free_var dt) -> well_formed_aux dt 0 = true -> 
                         term_to_dbv_aux (dbv_to_term_aux_2 dt 0 v) nil = dt. 
@@ -165,3 +165,4 @@ Proof.
   reflexivity. congruence. 
 
   simpl. f_equal.
+*)
