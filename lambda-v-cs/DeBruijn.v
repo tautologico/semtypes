@@ -1,4 +1,6 @@
 
+Require Import Arith. 
+Require Import Omega. 
 Require Import List.
 Require Import LambdaSyntax.
 
@@ -108,4 +110,144 @@ Example dbv_to_term_2 :
   (\2 --> (Var 2) $ (Var 1)). 
 Proof. reflexivity. Qed. 
 
+Lemma dbvar_to_var_zero : forall (n v : var), 
+                            db_var_to_var n 0 v = n. 
+Proof. 
+  intros n v. 
+  unfold db_var_to_var. 
+  replace (leb (S n) 0) with (false). apply eq_sym. apply minus_n_O. 
+  apply eq_sym. apply leb_correct_conv. apply lt_0_Sn. 
+Qed. 
 
+Lemma mapvar_nil : forall v lv, map_var v lv nil = v + lv. 
+Proof. 
+  intros v lv. unfold map_var. simpl. reflexivity. 
+Qed. 
+
+Lemma maxvar_app : forall (A : Type) v n (dt1 dt2 : db_term A),
+                     v >= max_free_var (dt1 $$ dt2) n -> 
+                     v >= max_free_var dt1 n /\ v >= max_free_var dt2 n. 
+Proof. 
+  intros A v n dt1 dt2 Hgeq. simpl in Hgeq. 
+  apply NPeano.Nat.max_lub_iff in Hgeq. assumption. 
+Qed. 
+  
+(* 
+Lemma from_to_dbv_vars : 
+  forall (A : Type) v (dt : db_term A),
+    term_to_db_aux (db_to_term_aux dt 1 v) (v + 1 :: nil) 1 = 
+    term_to_db_aux (db_to_term_aux dt 0 v) nil 0.
+Proof. 
+  intros A v dt. induction dt. 
+  (* Case dt = db_const *) reflexivity. 
+
+  (* Case dt = db_var *)
+  simpl. rewrite dbvar_to_var_zero. 
+*)
+
+Fixpoint range_n_v (n : nat) (v : var) : list var := 
+  match n with 
+    | 0 => nil
+    | S n' => (v + n) :: (range_n_v n' v)
+  end.
+
+Lemma n_gt_0_Sn : forall n, 
+                    n > 0 -> (exists n', n = S n'). 
+Proof. 
+  intros n H. destruct n eqn:E. inversion H. 
+  exists n0. reflexivity. 
+Qed. 
+
+Lemma n_gt_Sv_Sn : forall n v,
+                     n > S v -> (exists n', n = S n').
+Proof. 
+  intros n v H. destruct n eqn:E. inversion H. exists n0. reflexivity. 
+Qed. 
+
+Lemma v_lt_n_0 : forall n v, v < n -> 0 < n - v. 
+Proof. 
+  intros; omega. 
+Qed. 
+  
+Lemma range_struct : forall n n' v,
+                       n = S n' -> 
+                       range_n_v n v = (v + n) :: range_n_v n' v. 
+Proof. 
+  intros. rewrite H. reflexivity. 
+Qed. 
+
+Lemma find_in_range2 : forall v0 n v,
+                        v < n -> 
+                        find_var_in_binders (range_n_v n v0) (v0 + n - v) 0 = Some v.
+Proof. 
+  intros. destruct v. apply n_gt_0_Sn in H. inversion H. 
+  apply range_struct with (v := v0) in H0. rewrite H0. simpl. 
+  replace (beq_nat (v0 + n - 0) (v0 + n)) with (true). reflexivity. 
+  rewrite <- minus_n_O. apply beq_nat_refl. 
+  apply n_gt_Sv_Sn in H. inversion H. 
+  apply range_struct with (v := v0) in H0. rewrite H0. simpl.
+Admitted. 
+
+Lemma find_in_range : forall v0 n v i,
+                        v < n -> i <= v -> 
+                        find_var_in_binders (range_n_v (n - i) v0) (v0 + n - v) i = Some v.
+Proof. 
+  intros. assert (Hlt: i < n). omega. apply v_lt_n_0 in Hlt. 
+  apply n_gt_0_Sn in Hlt. inversion Hlt. 
+  apply range_struct with (v := v0) (n := n - i) in H1. rewrite H1. 
+  simpl. 
+
+  (* Case v = 0 *)
+  inversion H0. 
+  apply n_gt_0_Sn in H. inversion H. rewrite <- minus_n_O. 
+  apply range_struct with (v := v0) in H2. rewrite H2. simpl. 
+  replace (beq_nat (v0 + n - 0) (v0 + n)) with (true). reflexivity. 
+  rewrite <- minus_n_O. apply beq_nat_refl. 
+
+  (* Case v = S v *)
+  assert (Hlt: i < n). omega. 
+  apply v_lt_n_0 in Hlt. 
+  apply n_gt_0_Sn in Hlt. inversion Hlt. 
+  apply range_struct with (v := v0) (n := n - i) in H1. rewrite H1. 
+  simpl. replace (beq_nat (v0 + n - S v) (v0 + (n - S v))) with (true). reflexivity. 
+  replace (v0 + (n - S v)) with (v0 + n - S v). apply beq_nat_refl. 
+  omega.
+Qed. 
+
+Lemma mapvar_in_range : forall v0 n v, 
+                          (S v) <= n ->  
+                          map_var (v0 + n - v) n (range_n_v n v0) = v.
+Proof. 
+  intros. unfold map_var. rewrite find_in_range2. reflexivity. 
+  omega. 
+Qed. 
+
+Lemma mapvar_out_of_range : forall v n v0, 
+                              (v - n) <= v0 -> 
+                              map_var (v - n) n (range_n_v n v0) = v. 
+Proof. 
+  intros. Admitted. 
+
+Theorem from_to_dbv_aux : 
+  forall (A : Type) (dt : db_term A) v n,
+    v >= (max_free_var dt n) -> 
+    term_to_db_aux (db_to_term_aux dt n v) (range_n_v n v) n = dt.
+Proof. 
+  intros A dt. 
+  induction dt. 
+
+  (* Case dt = db_const *) reflexivity. 
+
+  (* Case dt = db_var *)
+  intros. simpl in H. 
+  simpl. unfold db_var_to_var. destruct (leb (S v) n) eqn:E. 
+  apply leb_complete in E. rewrite mapvar_in_range. reflexivity. assumption.
+  rewrite mapvar_out_of_range. reflexivity. auto. 
+
+  (* Case dt = dt_app *)
+  intros. simpl. apply maxvar_app in H. 
+  rewrite IHdt1; try rewrite IHdt2; try reflexivity; tauto. 
+
+  (* Case dt = db_abs *)
+  intros. simpl. f_equal. apply IHdt. simpl in H. assumption. 
+Qed. 
