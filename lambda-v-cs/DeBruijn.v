@@ -176,49 +176,72 @@ Proof.
   intros. rewrite H. reflexivity. 
 Qed. 
 
-Lemma find_in_range2 : forall v0 n v,
-                        v < n -> 
-                        find_var_in_binders (range_n_v n v0) (v0 + n - v) 0 = Some v.
+Lemma find_in_range_v : forall v0 n v,
+                        v < n ->
+                        find_var_in_binders (range_n_v (n - v) v0) (v0 + n - v) v = Some v.
 Proof. 
-  intros. destruct v. apply n_gt_0_Sn in H. inversion H. 
-  apply range_struct with (v := v0) in H0. rewrite H0. simpl. 
-  replace (beq_nat (v0 + n - 0) (v0 + n)) with (true). reflexivity. 
-  rewrite <- minus_n_O. apply beq_nat_refl. 
-  apply n_gt_Sv_Sn in H. inversion H. 
-  apply range_struct with (v := v0) in H0. rewrite H0. simpl.
-Admitted. 
-
-Lemma find_in_range : forall v0 n v i,
-                        v < n -> i <= v -> 
-                        find_var_in_binders (range_n_v (n - i) v0) (v0 + n - v) i = Some v.
-Proof. 
-  intros. assert (Hlt: i < n). omega. apply v_lt_n_0 in Hlt. 
-  apply n_gt_0_Sn in Hlt. inversion Hlt. 
-  apply range_struct with (v := v0) (n := n - i) in H1. rewrite H1. 
-  simpl. 
+  intros. destruct v. 
 
   (* Case v = 0 *)
-  inversion H0. 
   apply n_gt_0_Sn in H. inversion H. rewrite <- minus_n_O. 
-  apply range_struct with (v := v0) in H2. rewrite H2. simpl. 
-  replace (beq_nat (v0 + n - 0) (v0 + n)) with (true). reflexivity. 
+  apply range_struct with (v := v0) in H0. rewrite H0. 
+  simpl. replace (beq_nat (v0 + n - 0) (v0 + n)) with (true). reflexivity. 
   rewrite <- minus_n_O. apply beq_nat_refl. 
 
   (* Case v = S v *)
-  assert (Hlt: i < n). omega. 
-  apply v_lt_n_0 in Hlt. 
-  apply n_gt_0_Sn in Hlt. inversion Hlt. 
-  apply range_struct with (v := v0) (n := n - i) in H1. rewrite H1. 
+  assert (H': S v < n). assumption. 
+  apply v_lt_n_0 in H. apply n_gt_0_Sn in H. inversion H. 
+  apply range_struct with (v := v0) (n := n - S v) in H0. rewrite H0. 
   simpl. replace (beq_nat (v0 + n - S v) (v0 + (n - S v))) with (true). reflexivity. 
   replace (v0 + (n - S v)) with (v0 + n - S v). apply beq_nat_refl. 
   omega.
+Qed. 
+
+Lemma minus_pred : forall n m, n > m -> m > 0 -> n - pred m = S (n - m). 
+Proof. 
+  intros n m Hnm Hm0. destruct m. inversion Hm0. 
+  simpl. rewrite NPeano.Nat.sub_succ_r. omega. 
+Qed. 
+
+Lemma minus_minus_Sn : forall n v i, 
+                         n > v - i -> v - i > 0 -> (n - (v - S i)) = S (n - (v - i)).
+Proof. 
+  intros. simpl. rewrite NPeano.Nat.sub_succ_r. apply minus_pred; assumption. 
+Qed. 
+
+Lemma find_in_range_aux : 
+  forall v0 n v i,
+    v < n -> i <= v -> 
+    find_var_in_binders (range_n_v (n - (v-i)) v0) (v0 + n - v) (v-i) = Some v.
+Proof. 
+  intros. induction i. rewrite <- minus_n_O. apply find_in_range_v. assumption. 
+
+  assert (Hnvi: n > v - i). omega. 
+  assert (Hvi0: v - i > 0). omega. 
+  apply minus_minus_Sn in Hnvi. 
+  apply range_struct with (v := v0) (n := n - (v - S i)) in Hnvi. rewrite Hnvi. 
+  simpl. 
+  replace (beq_nat (v0 + n - v) (v0 + (n - (v - S i)))) with (false). 
+  replace (S (v - S i)) with (v - i). 
+  apply IHi. omega. omega. apply eq_sym. apply beq_nat_false_iff. omega. 
+  assumption. 
+Qed. 
+
+Lemma find_in_range : forall v0 n v,
+                        v < n -> 
+                        find_var_in_binders (range_n_v n v0) (v0 + n - v) 0 = Some v.
+Proof. 
+  intros. replace (range_n_v n v0) with (range_n_v (n - (v-v)) v0). 
+  replace 0 with (v-v). apply find_in_range_aux with (i := v). assumption. 
+  apply le_refl. apply minus_diag. 
+  replace (n - (v - v)) with (n). reflexivity. omega. 
 Qed. 
 
 Lemma mapvar_in_range : forall v0 n v, 
                           (S v) <= n ->  
                           map_var (v0 + n - v) n (range_n_v n v0) = v.
 Proof. 
-  intros. unfold map_var. rewrite find_in_range2. reflexivity. 
+  intros. unfold map_var. rewrite find_in_range. reflexivity. 
   omega. 
 Qed. 
 
