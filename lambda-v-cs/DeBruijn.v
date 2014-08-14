@@ -245,11 +245,23 @@ Proof.
   omega. 
 Qed. 
 
+Lemma find_out_of_range : forall v0 n v i,
+                            v <= v0 -> 
+                            find_var_in_binders (range_n_v n v0) v i = None. 
+Proof. 
+  intros. generalize dependent i. induction n. reflexivity. 
+  intros. simpl. replace (beq_nat v (v0 + S n)) with (false). 
+  apply IHn. apply eq_sym. apply beq_nat_false_iff. omega. 
+Qed. 
+
 Lemma mapvar_out_of_range : forall v n v0, 
+                              v >= n -> 
                               (v - n) <= v0 -> 
                               map_var (v - n) n (range_n_v n v0) = v. 
 Proof. 
-  intros. Admitted. 
+  intros. unfold map_var. rewrite find_out_of_range. 
+  rewrite plus_comm. apply le_plus_minus_r. omega. assumption.  
+Qed. 
 
 Theorem from_to_dbv_aux : 
   forall (A : Type) (dt : db_term A) v n,
@@ -265,7 +277,8 @@ Proof.
   intros. simpl in H. 
   simpl. unfold db_var_to_var. destruct (leb (S v) n) eqn:E. 
   apply leb_complete in E. rewrite mapvar_in_range. reflexivity. assumption.
-  rewrite mapvar_out_of_range. reflexivity. auto. 
+  apply leb_complete_conv in E. 
+  rewrite mapvar_out_of_range. reflexivity. omega. assumption. 
 
   (* Case dt = dt_app *)
   intros. simpl. apply maxvar_app in H. 
