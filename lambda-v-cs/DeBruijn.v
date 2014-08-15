@@ -23,6 +23,8 @@ Notation "[ v # T ]" := (db_var (A := T) v) (at level 40, no associativity).
 
 Definition binders := list var.
 
+(** * Conversion to DeBruijn form *)
+
 Fixpoint find_var_in_binders (bs : binders) (v : var) (i : nat) : option nat := 
   match bs with
     | nil => None
@@ -46,6 +48,8 @@ Fixpoint term_to_db_aux {A : Type} (t : term A) (bs : binders) (lv : nat) : db_t
 
 Definition term_to_db {A : Type} (t : term A) : db_term A := 
   term_to_db_aux t nil 0.
+
+(** ** Conversion examples *)
 
 Example term_to_db_ex1 : 
   term_to_db (\X # nat --> Var X) = (\\ (db_var 0)).
@@ -80,6 +84,8 @@ Example term_to_db_ex7 :
   (\\ (\\ [6 # nat])). 
 Proof. reflexivity. Qed. 
 
+(** * Conversion from DeBruijn form *)
+
 Definition db_var_to_var (n i v : var) : var := 
   if leb (S n) i then (v + i - n) else (n - i). 
 
@@ -102,6 +108,8 @@ Fixpoint max_free_var {A : Type} (dt : db_term A) (lv : nat) : nat :=
 Definition db_to_term {A : Type} (dt : db_term A) : term A := 
   db_to_term_aux dt 0 (max_free_var dt 0).
 
+(** ** Examples *)
+
 Example dbv_to_term_1 : db_to_term (\\ [0 # nat]) = (Abs 1 (Var 1)).
 Proof. reflexivity. Qed. 
 
@@ -109,6 +117,8 @@ Example dbv_to_term_2 :
   db_to_term (\\ ([0 # nat] $$ [2])) = 
   (\2 --> (Var 2) $ (Var 1)). 
 Proof. reflexivity. Qed. 
+
+(** * Auxiliary lemmas and theorems *)
 
 Lemma dbvar_to_var_zero : forall (n v : var), 
                             db_var_to_var n 0 v = n. 
@@ -131,19 +141,8 @@ Proof.
   intros A v n dt1 dt2 Hgeq. simpl in Hgeq. 
   apply NPeano.Nat.max_lub_iff in Hgeq. assumption. 
 Qed. 
-  
-(* 
-Lemma from_to_dbv_vars : 
-  forall (A : Type) v (dt : db_term A),
-    term_to_db_aux (db_to_term_aux dt 1 v) (v + 1 :: nil) 1 = 
-    term_to_db_aux (db_to_term_aux dt 0 v) nil 0.
-Proof. 
-  intros A v dt. induction dt. 
-  (* Case dt = db_const *) reflexivity. 
 
-  (* Case dt = db_var *)
-  simpl. rewrite dbvar_to_var_zero. 
-*)
+(** Generate a list [[v + n; v + n - 1; ...; v]]. *)
 
 Fixpoint range_n_v (n : nat) (v : var) : list var := 
   match n with 
@@ -263,6 +262,7 @@ Proof.
   rewrite plus_comm. apply le_plus_minus_r. omega. assumption.  
 Qed. 
 
+(** *  *)
 Theorem from_to_dbv_aux : 
   forall (A : Type) (dt : db_term A) v n,
     v >= (max_free_var dt n) -> 
@@ -287,3 +287,10 @@ Proof.
   (* Case dt = db_abs *)
   intros. simpl. f_equal. apply IHdt. simpl in H. assumption. 
 Qed. 
+
+Theorem from_to_dbv : forall (A : Type) (dt : db_term A),
+                        term_to_db (db_to_term dt) = dt. 
+Proof. 
+  intros. unfold term_to_db. unfold db_to_term. apply from_to_dbv_aux. auto. 
+Qed. 
+
