@@ -213,16 +213,19 @@ Lemma find_in_range_aux :
     v < n -> i <= v -> 
     find_var_in_binders (range_n_v (n - (v-i)) v0) (v0 + n - v) (v-i) = Some v.
 Proof. 
-  intros. induction i. rewrite <- minus_n_O. apply find_in_range_v. assumption. 
+  intros. induction i. 
+  (* Case i = 0 *)
+  rewrite <- minus_n_O. apply find_in_range_v. assumption. 
 
-  assert (Hnvi: n > v - i). omega. 
-  assert (Hvi0: v - i > 0). omega. 
+  (* Case i = S i *)
+  assert (Hnvi: n > v - i); try omega. 
+  assert (Hvi0: v - i > 0); try omega. 
   apply minus_minus_Sn in Hnvi. 
   apply range_struct with (v := v0) (n := n - (v - S i)) in Hnvi. rewrite Hnvi. 
   simpl. 
   replace (beq_nat (v0 + n - v) (v0 + (n - (v - S i)))) with (false). 
-  replace (S (v - S i)) with (v - i). 
-  apply IHi. omega. omega. apply eq_sym. apply beq_nat_false_iff. omega. 
+  replace (S (v - S i)) with (v - i); try omega. 
+  apply IHi; omega. apply eq_sym. apply beq_nat_false_iff. omega. 
   assumption. 
 Qed. 
 
@@ -230,10 +233,9 @@ Lemma find_in_range : forall v0 n v,
                         v < n -> 
                         find_var_in_binders (range_n_v n v0) (v0 + n - v) 0 = Some v.
 Proof. 
-  intros. replace (range_n_v n v0) with (range_n_v (n - (v-v)) v0). 
+  intros. replace (range_n_v n v0) with (range_n_v (n - 0) v0).
   replace 0 with (v-v). apply find_in_range_aux with (i := v). assumption. 
-  apply le_refl. apply minus_diag. 
-  replace (n - (v - v)) with (n). reflexivity. omega. 
+  apply le_refl. apply minus_diag. rewrite <- minus_n_O. reflexivity. 
 Qed. 
 
 Lemma mapvar_in_range : forall v0 n v, 
@@ -262,7 +264,7 @@ Proof.
   rewrite plus_comm. apply le_plus_minus_r. omega. assumption.  
 Qed. 
 
-(** *  *)
+(** * Converting from DeBruijn to standard and back is the identity  *)
 Theorem from_to_dbv_aux : 
   forall (A : Type) (dt : db_term A) v n,
     v >= (max_free_var dt n) -> 
