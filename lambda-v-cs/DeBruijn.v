@@ -296,3 +296,37 @@ Proof.
   intros. unfold term_to_db. unfold db_to_term. apply from_to_dbv_aux. auto. 
 Qed. 
 
+(** * Substitution *)
+
+(** Shifting function, needed to preserve the identity of free variables 
+    after substitution. *)
+
+Fixpoint shift_aux {A : Type} (dt : db_term A) d c : db_term A := 
+  match dt with
+    | db_const _ => dt
+    | db_var k => db_var (if leb k c then k else k + d)
+    | db_abs body => db_abs (shift_aux body d (S c))
+    | db_app m n => db_app (shift_aux m d c) (shift_aux n d c)
+  end. 
+
+Definition shift {A : Type} (dt : db_term A) d : db_term A :=
+  shift_aux dt d 0.
+
+Example shift_ex1 : 
+  shift (\\ (\\ [1 # nat] $$ ([0] $$ [2]))) 2 = (\\ (\\ [1 # nat] $$ ([0] $$ [2]))).
+Proof. reflexivity. Qed. 
+
+Example shift_ex2 : 
+  shift (\\ ([0 # nat] $$ [2]) $$ (\\ ([0] $$ [1]) $$ [2])) 2 = 
+  (\\ ([0 # nat] $$ [4]) $$ (\\ ([0] $$ [1]) $$ [2])). 
+Proof. reflexivity. Qed. 
+
+(** Substitute [dt] for variable [v] in term [orig]. *)
+
+Fixpoint subst {A : Type} (orig : db_term A) v (dt : db_term A) : db_term A :=
+  match orig with
+    | db_const _ => orig
+    | db_var x => if eq_nat_dec v x then dt else orig
+    | db_abs body => db_abs (subst body (S v) (shift dt 1))
+    | db_app m n => db_app (subst m v dt) (subst n v dt)
+  end. 
