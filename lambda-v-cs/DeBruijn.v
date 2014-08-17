@@ -17,7 +17,7 @@ Inductive db_term (A : Type) : Type :=
 Arguments db_var [A] _. 
 
 Notation "\\ M" := (db_abs M) (at level 60, right associativity). 
-Notation "M $$ N" := (db_app M N) (at level 60, right associativity). 
+Notation "M $$ N" := (db_app M N) (at level 50, left associativity). 
 Notation "[ v ]" := (db_var v) (at level 40, no associativity). 
 Notation "[ v # T ]" := (db_var (A := T) v) (at level 40, no associativity). 
 
@@ -330,3 +330,21 @@ Fixpoint subst {A : Type} (orig : db_term A) v (dt : db_term A) : db_term A :=
     | db_abs body => db_abs (subst body (S v) (shift dt 1))
     | db_app m n => db_app (subst m v dt) (subst n v dt)
   end. 
+
+(** Module to localize substitution notation for DeBruijn terms. *)
+
+Module SubstNotation.
+  Notation "M [ v :-> N ]" := (subst M v N) (at level 50, left associativity). 
+End SubstNotation.
+
+Import SubstNotation. 
+
+(** ** The substitution lemma for DeBruijn terms *)
+
+Lemma subst_lemma : forall (A : Type) (M N L : db_term A) x y,
+                      x <> y -> M[x :-> N][y :-> L] = M[y :-> L][x :-> N[y :-> L]].
+Proof. 
+  intros A M N L x y Hneq. induction M.
+
+  (* Case M = db_const *) reflexivity. 
+  
