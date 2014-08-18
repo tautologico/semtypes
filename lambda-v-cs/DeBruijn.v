@@ -304,7 +304,7 @@ Qed.
 Fixpoint shift_aux {A : Type} (dt : db_term A) d c : db_term A := 
   match dt with
     | db_const _ => dt
-    | db_var k => db_var (if leb k c then k else k + d)
+    | db_var k => db_var (if leb (S k) c then k else k + d)
     | db_abs body => db_abs (shift_aux body d (S c))
     | db_app m n => db_app (shift_aux m d c) (shift_aux n d c)
   end. 
@@ -313,12 +313,12 @@ Definition shift {A : Type} (dt : db_term A) d : db_term A :=
   shift_aux dt d 0.
 
 Example shift_ex1 : 
-  shift (\\ (\\ [1 # nat] $$ ([0] $$ [2]))) 2 = (\\ (\\ [1 # nat] $$ ([0] $$ [2]))).
+  shift (\\ (\\ [1 # nat] $$ ([0] $$ [2]))) 2 = (\\ (\\ [1 # nat] $$ ([0] $$ [4]))).
 Proof. reflexivity. Qed. 
 
 Example shift_ex2 : 
   shift (\\ ([0 # nat] $$ [2]) $$ (\\ ([0] $$ [1]) $$ [2])) 2 = 
-  (\\ ([0 # nat] $$ [4]) $$ (\\ ([0] $$ [1]) $$ [2])). 
+  (\\ ([0 # nat] $$ [4]) $$ (\\ ([0] $$ [1]) $$ [4])). 
 Proof. reflexivity. Qed. 
 
 (** Substitute [dt] for variable [v] in term [orig]. *)
@@ -339,12 +339,146 @@ End SubstNotation.
 
 Import SubstNotation. 
 
+(** ** Free and bound variables *)
+
+Fixpoint var_free_in_term {A : Type} (dt : db_term A) v : bool := 
+  match dt with
+    | db_const _ => false
+    | db_var v' => beq_nat v v'
+    | db_abs body => var_free_in_term body (S v)
+    | db_app m n => orb (var_free_in_term m v) (var_free_in_term n v)
+  end. 
+
+Inductive freeIn {A : Type} : db_term A -> var -> Prop := 
+| freeIn_var : forall (v : var), freeIn (db_var v) v
+| freeIn_app_l : forall (m n : db_term A) (v : var), freeIn m v -> freeIn (db_app m n) v
+| freeIn_app_r : forall (m n : db_term A) (v : var), freeIn n v -> freeIn (db_app m n) v
+| freeIn_abs : forall (body : db_term A) (v : var), freeIn body (S v) -> freeIn (db_abs body) v. 
+
+Example freeIn_ex1 : freeIn (\\ [1 # nat]) 0. 
+Proof. 
+  apply freeIn_abs. apply freeIn_var. 
+Qed. 
+
+Lemma not_free_in_var : forall (A : Type) v v',
+                          ~(freeIn (db_var (A := A) v) v') -> v <> v'. 
+Proof. 
+  intros A v v' Hnfree. 
+  intro Hcontra. apply Hnfree. rewrite Hcontra. apply freeIn_var. 
+Qed. 
+
+Lemma not_free_in_app : forall (A : Type) (dt1 dt2 : db_term A) v,
+                          ~(freeIn (dt1 $$ dt2) v) -> ~(freeIn dt1 v) /\ ~(freeIn dt2 v). 
+Proof. 
+  intros A dt1 dt2 v Hnfree. 
+  split; intro Hcontra; apply Hnfree; 
+    [ apply freeIn_app_l | apply freeIn_app_r ]; assumption. 
+Qed. 
+
+Lemma not_free_abs_succ_body : forall (A : Type) (dt : db_term A) v,
+                                 ~(freeIn (\\ dt) v) -> 
+                                 ~(freeIn dt (S v)). 
+Proof. 
+  intros A dt v Hnfree. intro Hcontra; apply Hnfree. 
+  apply freeIn_abs. assumption. 
+Qed. 
+
 (** ** The substitution lemma for DeBruijn terms *)
 
-Lemma subst_lemma : forall (A : Type) (M N L : db_term A) x y,
-                      x <> y -> M[x :-> N][y :-> L] = M[y :-> L][x :-> N[y :-> L]].
+Lemma subst_same_var : forall (A : Type) (dt : db_term A) v,
+                         (db_var v)[v :-> dt] = dt. 
 Proof. 
-  intros A M N L x y Hneq. induction M.
+  intros A dt v. 
+  simpl. destruct (eq_nat_dec v v). reflexivity. congruence. 
+Qed. 
+
+Lemma subst_diff_var : forall (A : Type) (dt : db_term A) v v',
+                    v <> v' -> (db_var v)[v' :-> dt] = (db_var v). 
+Proof. 
+  intros A dt v v' Hneq. 
+  simpl. destruct (eq_nat_dec v' v). contra_equality. reflexivity. 
+Qed. 
+
+Lemma subst_non_free : forall (A : Type) (dt1 dt2 : db_term A) v,
+                         ~(freeIn dt1 v) -> dt1 [v :-> dt2] = dt1. 
+Proof. 
+  intros A dt1. induction dt1; try reflexivity. 
+
+  (* Case dt1 = db_var *)
+  intros dt2 v0 Hnfree. 
+  apply not_free_in_var in Hnfree. rewrite subst_diff_var. reflexivity. assumption. 
+
+  (* Case dt1 = db_app *)
+  intros dt2 v Hnfree. apply not_free_in_app in Hnfree. 
+  simpl; f_equal; [ apply IHdt1_1 | apply IHdt1_2 ]; tauto. 
+
+  (* Case dt1 = dt_abs *)
+  intros dt2 v Hnfree. simpl. f_equal. apply IHdt1. 
+  apply not_free_abs_succ_body. assumption. 
+Qed. 
+
+Lemma shift_aux_gt : forall (A : Type) v d c,
+                       v >= c -> shift_aux (db_var (A := A) v) d c = db_var (v + d).
+Proof. 
+  intros A v d c Hgt. destruct c. simpl. reflexivity. simpl. 
+  replace (leb v c) with (false). reflexivity. 
+  apply eq_sym. apply leb_correct_conv. omega. 
+Qed. 
+
+Lemma shift_subst_xchg : forall (A : Type) (dt1 dt2 : db_term A) v, 
+                           (shift dt1 1)[S v :-> shift dt2 1] = shift (dt1 [v :-> dt2]) 1. 
+Proof. 
+  intros A dt1 dt2 v. 
+  unfold shift. 
+  induction dt1; try reflexivity. 
+
+  (* Case dt1 = db_var *)
+  destruct (eq_nat_dec v0 v). 
+    (* Case v0 = v *) 
+    rewrite shift_aux_gt. rewrite e.  rewrite NPeano.Nat.add_1_r. 
+    repeat rewrite subst_same_var. reflexivity. auto with arith. 
+    (* Case v0 <> v *)
+      rewrite subst_diff_var; try assumption. 
+      rewrite shift_aux_gt; try apply le_0_n. rewrite NPeano.Nat.add_1_r. 
+      rewrite subst_diff_var;  auto with arith. 
+
+  (* Case dt1 = db_app *)
+  simpl; f_equal; [ apply IHdt1_1 | apply IHdt1_2 ]. 
+
+  (* Case dt1 = db_abs *)
+  simpl. f_equal. 
+
+Lemma subst_lemma : forall (A : Type) (M N L : db_term A) x y,
+                      x <> y -> ~(freeIn L x) -> 
+                      M[x :-> N][y :-> L] = M[y :-> L][x :-> N[y :-> L]].
+Proof. 
+  intros A M. induction M.
 
   (* Case M = db_const *) reflexivity. 
-  
+
+  (* Case M = db_var *)
+  intros N L x y Hneq Hnfree. 
+  destruct (eq_nat_dec v x) as [ Hveqx | Hvneqx ]. 
+    (* Case v = x *)
+    rewrite Hveqx. rewrite subst_same_var. 
+    rewrite subst_diff_var. rewrite subst_same_var. reflexivity. assumption. 
+
+    (* Case v <> x *)
+    rewrite subst_diff_var; try assumption. 
+    destruct (eq_nat_dec v y) as [ Hveqy | Hvneqy ]. 
+      (* Case v = y *)
+      rewrite Hveqy. repeat rewrite subst_same_var. 
+      rewrite subst_non_free. reflexivity. assumption. 
+
+      (* Case v <> y *)
+      repeat rewrite subst_diff_var; try assumption. reflexivity. 
+
+  (* Case M = db_app *)
+  intros N L x y Hneq Hnfree. simpl. f_equal; [ apply IHM1 | apply IHM2 ]; assumption. 
+
+  (* Case M = db_abs *)
+  intros N L x y Hneq Hnfree. 
+  simpl. f_equal. rewrite IHM. f_equal.
+
+
+Qed. 
