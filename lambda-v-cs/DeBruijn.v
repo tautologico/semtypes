@@ -439,58 +439,6 @@ Proof.
   apply eq_sym. apply leb_correct. apply gt_S_le. assumption. 
 Qed. 
 
-(* 
-Lemma shift_shift_xchg : 
-  forall (A : Type) (dt : db_term A) c,
-    (forall v', freeIn dt v' -> v' >= c) -> 
-    shift_aux (shift_aux dt 1 c) 1 0 = shift_aux (shift_aux dt 1 0) 1 (S c). 
-Proof. 
-  intros A dt. induction dt. reflexivity. 
-
-  Focus 3. intros. simpl. f_equal. apply IHdt. 
-*)
-
-(* 
-Lemma shift_aux_subst_xchg : 
-  forall (A : Type) (dt1 dt2 : db_term A) v c, 
-    v >= c -> (forall v', freeIn dt1 v' -> v' >= c) -> 
-    (shift_aux dt1 1 c)[S v :-> shift_aux dt2 1 c] = shift_aux (dt1 [v :-> dt2]) 1 c. 
-Proof. 
-  intros A dt1.
-  induction dt1; try reflexivity. 
-
-  (* Case dt1 = db_var *)
-  intros dt2 v0 c Hcleqv0 Hgeq. 
-  destruct (eq_nat_dec v v0). 
-    (* Case v0 = v *) 
-    rewrite e. 
-    rewrite shift_aux_geq; try assumption. rewrite NPeano.Nat.add_1_r. 
-    repeat rewrite subst_same_var. reflexivity. 
-    
-    (* Case v0 <> v *)
-    rewrite subst_diff_var; try assumption. 
-    rewrite shift_aux_geq; try apply le_0_n. rewrite NPeano.Nat.add_1_r. 
-    rewrite subst_diff_var;  auto with arith. apply Hgeq. apply freeIn_var. 
-
-  (* Case dt1 = db_app *)
-  intros dt2 v c Hcleqv Hgeq. 
-  simpl; f_equal; [ apply IHdt1_1 | apply IHdt1_2 ]; try assumption; 
-    intros v' Hfree; apply Hgeq; [ apply freeIn_app_l | apply freeIn_app_r ]; assumption. 
-
-  (* Case dt1 = db_abs *)
-  intros dt2 v c Hcleqv Hgeq. 
-  (*
-  replace (shift_aux (\\ dt1) 1 c) with (\\ (shift_aux dt1 1 (S c))). 
-  replace ((\\ dt1) [v :-> dt2]) with (\\ (dt1 [S v :-> shift dt2 1])). 
-  replace (shift_aux (\\ (dt1 [S v :-> shift dt2 1])) 1 c) with
-          (\\ (shift_aux (dt1 [S v :-> shift dt2 1]) 1 (S c))). 
-  rewrite <- IHdt1. simpl. f_equal. *)
-  simpl. f_equal. rewrite <- IHdt1. unfold shift. 
-  f_equal. 
-  apply IHdt1. 
-
-*)
-
 Lemma free_vars_abs : 
   forall (A : Type) (t : db_term A) c1 c2 v1,
     freeIn (\\ t) v1 -> v1 >= c1 /\ v1 >= c2 -> S v1 >= S c1 /\ S v1 >= S c2. 
@@ -499,68 +447,154 @@ Proof.
   split; apply le_n_S; apply Hgeq. 
 Qed. 
 
-(*
+Lemma free_shift_aux : forall (A : Type) (t : db_term A) v c,
+                         v >= c -> freeIn t v -> freeIn (shift_aux t 1 c) (S v). 
+Proof. 
+  intros A t v c v_geq_c Hfree. generalize dependent c. 
+  induction Hfree. 
+
+  (* Case freeIn_var *)
+  intros. rewrite shift_aux_geq; try assumption. 
+  rewrite NPeano.Nat.add_1_r. apply freeIn_var. 
+
+  (* Case freeIn_app_l *)
+  intros. simpl. apply freeIn_app_l. apply IHHfree; assumption. 
+
+  (* Case freeIn_app_r *)
+  intros. simpl. apply freeIn_app_r. apply IHHfree; assumption. 
+
+  (* Case freeIn_abs *)
+  intros. simpl. apply freeIn_abs. apply IHHfree. apply le_n_S; assumption. 
+Qed. 
+
+Lemma free_shift : forall (A : Type) (t : db_term A) v,
+                     freeIn t v -> freeIn (shift t 1) (S v). 
+Proof. 
+  intros. unfold shift. apply free_shift_aux; try assumption. apply le_0_n. 
+Qed.
+
+Lemma lt_Sn_m_n_m : forall n m, S n < m -> n < m.
+Proof. 
+  intros. assert (Hn : n < S n). apply lt_n_Sn. 
+  apply lt_trans with (m := S n) (p := m) in Hn; assumption. 
+Qed. 
+
+Lemma free_app_contra : forall (A : Type) (t1 t2 : db_term A) v,
+                          freeIn (t1 $$ t2) v -> freeIn t1 v \/ freeIn t2 v. 
+Proof. 
+  intros A t1 t2 v Hfree. 
+  inversion Hfree; [ left | right ]; assumption. 
+Qed. 
+
+Lemma free_shift_aux_free : forall (A : Type) (t : db_term A) v c,
+                              v >= c -> freeIn (shift_aux t 1 c) (S v) -> freeIn t v. 
+Proof. 
+  intros A t. induction t. 
+  
+  (* Case t = db_const *)
+  intros v c v_geq_c Hfree. simpl in Hfree. inversion Hfree. 
+
+  (* Case t = db_var *)
+  intros v0 c v0_geq_c Hfree. destruct (eq_nat_dec v v0) as [ v_eq_v0 | v_neq_v0 ]. 
+    (* Case v = v0 *) rewrite v_eq_v0. apply freeIn_var. 
+    (* Case v <> v0 *)
+    destruct (le_lt_dec c v) as [ v_geq_c | v_lt_c ]. 
+      (* Case v >= c *) 
+      rewrite shift_aux_geq in Hfree; try assumption. 
+      rewrite NPeano.Nat.add_1_r in Hfree. inversion Hfree. apply freeIn_var. 
+      (* Case v < c *)
+      rewrite shift_aux_lt in Hfree; try assumption. inversion Hfree. 
+      rewrite H1 in v_lt_c. apply lt_Sn_m_n_m in v_lt_c. 
+      assert (Hcontra := le_lt_trans _ _ _ v0_geq_c v_lt_c). 
+      apply lt_irrefl in Hcontra. exfalso; assumption. 
+
+  (* Case t = db_app *)
+  intros v c v_geq_c Hfree. simpl in Hfree. apply free_app_contra in Hfree.   
+  elim Hfree.
+  intro H; apply freeIn_app_l; apply IHt1 with (c := c); assumption. 
+  intro H; apply freeIn_app_r; apply IHt2 with (c := c); assumption. 
+
+  (* Case t = db_abs *)
+  intros v c v_geq_c Hfree. apply freeIn_abs. simpl in Hfree. 
+  apply IHt with (c := S c). apply le_n_S; assumption. apply free_abs_succ_body. 
+  assumption. 
+Qed. 
+
+Lemma free_shift_free : forall (A : Type) (t : db_term A) v,
+                          freeIn (shift t 1) (S v) -> freeIn t v. 
+Proof. 
+  intros. unfold shift. apply free_shift_aux_free with (c := 0). 
+  apply le_0_n. assumption. 
+Qed. 
+
 Lemma shift_shift : 
   forall (A : Type) (t : db_term A) c1 c2,
-    (forall v, freeIn t v -> v >= c1 /\ v >= c2) -> 
+    c1 >= c2 -> 
     shift_aux (shift_aux t 1 c1) 1 c2 = shift_aux (shift_aux t 1 c2) 1 (S c1). 
 Proof. 
   intros A t. induction t. reflexivity. 
 
   (* Case t = db_var *)
-  intros c1 c2 Hfree. specialize (Hfree v (freeIn_var v)). 
-  repeat rewrite shift_aux_geq; try omega. reflexivity. 
+  intros c1 c2 c1_geq_c2. destruct (le_lt_dec c1 v). 
+    (* Case v >= c1 *)
+    repeat rewrite shift_aux_geq; try omega. reflexivity. 
+    (* Case v < c1 *)
+    destruct (le_lt_dec c2 v). 
+      (* Case v >= c2 *)
+      rewrite shift_aux_lt; try assumption. rewrite shift_aux_geq; try assumption. 
+      rewrite shift_aux_lt. reflexivity. omega. 
+      (* Case v < c2 *)
+      repeat rewrite shift_aux_lt; try omega. reflexivity. 
 
   (* Case t = db_app *)
-  intros c1 c2 Hfree. 
-  simpl; f_equal; [ apply IHt1 | apply IHt2 ]; intros v' Hvf; 
-    apply Hfree; [ apply freeIn_app_l | apply freeIn_app_r ]; assumption. 
+  intros c1 c2 c1_geq_c2. 
+  simpl; f_equal; [ apply IHt1 | apply IHt2 ]; assumption. 
 
   (* Case t = db_abs *) 
-  intros c1 c2 Hfree.
-  simpl. f_equal. apply IHt. 
-  intros v Hf. specialize (Hfree (S v)). 
-  split. apply gt_S_n. apply lt_n_S. apply Hfree. generalize c1 c2. apply Hfree. 
-  assert (Hg : v > 0). apply v in Hfree. 
-*)
+  intros c1 c2 c1_geq_c2.
+  simpl. f_equal. apply IHt. apply le_n_S. assumption. 
+Qed. 
 
-(*
-Lemma shift_subst_free : 
-  forall (A : Type) (t1 t2 : db_term A) v c, 
-    freeIn t1 v -> 
-    (shift_aux t1 1 c)[S v :-> shift_aux t2 1 c] = shift_aux (t1 [v :-> t2]) 1 c. 
-Proof.
-  intros A t1 t2 v c Hfree. generalize dependent c. generalize dependent t2. 
-  induction Hfree. 
-  
-  Focus 4. intros t2 c. 
-  unfold shift. simpl. f_equal. rewrite <- IHHfree. f_equal. unfold shift. 
-*)
+Lemma shift_aux_subst_xchg : 
+  forall (A : Type) (dt1 dt2 : db_term A) v c, 
+    v >= c ->
+    (shift_aux dt1 1 c)[S v :-> shift_aux dt2 1 c] = shift_aux (dt1 [v :-> dt2]) 1 c. 
+Proof. 
+  intros A dt1.
+  induction dt1; try reflexivity. 
+
+  (* Case dt1 = db_var *)
+  intros dt2 v0 c v0_geq_c. 
+  destruct (eq_nat_dec v v0) as [ v0_eq_v | v0_diff_v ]. 
+    (* Case v0 = v *) 
+    rewrite v0_eq_v. rewrite shift_aux_geq; try assumption. 
+    rewrite NPeano.Nat.add_1_r. repeat rewrite subst_same_var. reflexivity. 
+    
+    (* Case v0 <> v *)
+    rewrite subst_diff_var; try assumption.
+    destruct (le_lt_dec c v). 
+      (* Case v >= c *)
+      rewrite shift_aux_geq; try apply le_0_n; try assumption. rewrite NPeano.Nat.add_1_r. 
+      rewrite subst_diff_var; auto with arith. 
+      (* Case v < c *)
+      rewrite shift_aux_lt; try assumption. rewrite subst_diff_var. reflexivity.
+      omega. 
+
+  (* Case dt1 = db_app *)
+  intros dt2 v c v_geq_c. 
+  simpl; f_equal; [ apply IHdt1_1 | apply IHdt1_2 ]; try assumption. 
+
+  (* Case dt1 = db_abs *)
+  intros dt2 v c v_geq_c. 
+  simpl. f_equal. rewrite <- IHdt1. f_equal. unfold shift. 
+  apply shift_shift. apply le_0_n. apply le_n_S; assumption. 
+Qed. 
 
 Lemma shift_subst_xchg : forall (A : Type) (dt1 dt2 : db_term A) v, 
                            (shift dt1 1)[S v :-> shift dt2 1] = shift (dt1 [v :-> dt2]) 1. 
 Proof. 
-  intros A dt1 dt2 v. 
-  unfold shift. 
-  induction dt1; try reflexivity. 
-
-  (* Case dt1 = db_var *)
-  destruct (eq_nat_dec v0 v). 
-    (* Case v0 = v *) 
-    rewrite shift_aux_geq. rewrite e. rewrite NPeano.Nat.add_1_r. 
-    repeat rewrite subst_same_var. reflexivity. auto with arith. 
-    (* Case v0 <> v *)
-    rewrite subst_diff_var; try assumption. 
-    rewrite shift_aux_geq; try apply le_0_n. rewrite NPeano.Nat.add_1_r. 
-    rewrite subst_diff_var;  auto with arith. 
-
-  (* Case dt1 = db_app *)
-  simpl; f_equal; [ apply IHdt1_1 | apply IHdt1_2 ]. 
-
-  (* Case dt1 = db_abs *)
-  simpl. f_equal. 
-
-*)
+  intros A dt1 dt2 v. unfold shift. apply shift_aux_subst_xchg. apply le_0_n. 
+Qed. 
 
 Lemma subst_lemma : forall (A : Type) (M N L : db_term A) x y,
                       x <> y -> ~(freeIn L x) -> 
@@ -592,7 +626,8 @@ Proof.
 
   (* Case M = db_abs *)
   intros N L x y Hneq Hnfree. 
-  simpl. f_equal. rewrite IHM. f_equal.
-
-
+  simpl. f_equal. rewrite IHM. f_equal. apply shift_subst_xchg. 
+  apply not_eq_S; assumption. 
+  intro Hcontra. apply Hnfree. 
+  apply free_shift_free. assumption. 
 Qed. 
