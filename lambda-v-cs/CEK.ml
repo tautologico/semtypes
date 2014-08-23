@@ -148,3 +148,5 @@ let eval_cek t =
   | ExStuck -> failwith "Evaluation of an ill-formed expression"
   | ExVal v -> unload v
 
+let eval_show t = 
+  t |> eval_cek |> show_term
