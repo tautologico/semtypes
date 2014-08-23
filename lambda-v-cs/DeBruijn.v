@@ -606,16 +606,16 @@ Proof.
 
   (* Case M = db_var *)
   intros N L x y Hneq Hnfree. 
-  destruct (eq_nat_dec v x) as [ Hveqx | Hvneqx ]. 
+  destruct (eq_nat_dec v x) as [ v_eq_x | v_neq_x ]. 
     (* Case v = x *)
-    rewrite Hveqx. rewrite subst_same_var. 
+    rewrite v_eq_x. rewrite subst_same_var. 
     rewrite subst_diff_var. rewrite subst_same_var. reflexivity. assumption. 
 
     (* Case v <> x *)
     rewrite subst_diff_var; try assumption. 
-    destruct (eq_nat_dec v y) as [ Hveqy | Hvneqy ]. 
+    destruct (eq_nat_dec v y) as [ v_eq_y | v_neq_y ]. 
       (* Case v = y *)
-      rewrite Hveqy. repeat rewrite subst_same_var. 
+      rewrite v_eq_y. repeat rewrite subst_same_var. 
       rewrite subst_non_free. reflexivity. assumption. 
 
       (* Case v <> y *)
