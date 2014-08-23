@@ -38,5 +38,5 @@ Inductive cont (A : Type) : Type :=
     variables in $M$, and $\kappa$ is a p-continuation. *)
 
 Inductive state (A : Type) : Type := 
-| SRet : pcont A -> state A
-| STerm : term A -> env A -> retcont A -> state A. 
+| SRet : retcont A -> state A
+| STerm : term A -> env A -> pcont A -> state A. 
