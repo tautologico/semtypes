@@ -388,6 +388,22 @@ Lemma free_abs_succ_body : forall (A : Type) (t : db_term A) v,
 Proof. 
   intros A t v Hfabs. inversion Hfabs. assumption. 
 Qed. 
+
+Lemma free_vars_abs : 
+  forall (A : Type) (t : db_term A) c1 c2 v1,
+    freeIn (\\ t) v1 -> v1 >= c1 /\ v1 >= c2 -> S v1 >= S c1 /\ S v1 >= S c2. 
+Proof. 
+  intros A t c1 c2 v1 Hfabs Hgeq. 
+  split; apply le_n_S; apply Hgeq. 
+Qed. 
+
+Lemma free_app_contra : forall (A : Type) (t1 t2 : db_term A) v,
+                          freeIn (t1 $$ t2) v -> freeIn t1 v \/ freeIn t2 v. 
+Proof. 
+  intros A t1 t2 v Hfree. 
+  inversion Hfree; [ left | right ]; assumption. 
+Qed. 
+
   
 (** ** The substitution lemma for DeBruijn terms *)
 
@@ -439,14 +455,6 @@ Proof.
   apply eq_sym. apply leb_correct. apply gt_S_le. assumption. 
 Qed. 
 
-Lemma free_vars_abs : 
-  forall (A : Type) (t : db_term A) c1 c2 v1,
-    freeIn (\\ t) v1 -> v1 >= c1 /\ v1 >= c2 -> S v1 >= S c1 /\ S v1 >= S c2. 
-Proof. 
-  intros A t c1 c2 v1 Hfabs Hgeq. 
-  split; apply le_n_S; apply Hgeq. 
-Qed. 
-
 Lemma free_shift_aux : forall (A : Type) (t : db_term A) v c,
                          v >= c -> freeIn t v -> freeIn (shift_aux t 1 c) (S v). 
 Proof. 
@@ -477,13 +485,6 @@ Lemma lt_Sn_m_n_m : forall n m, S n < m -> n < m.
 Proof. 
   intros. assert (Hn : n < S n). apply lt_n_Sn. 
   apply lt_trans with (m := S n) (p := m) in Hn; assumption. 
-Qed. 
-
-Lemma free_app_contra : forall (A : Type) (t1 t2 : db_term A) v,
-                          freeIn (t1 $$ t2) v -> freeIn t1 v \/ freeIn t2 v. 
-Proof. 
-  intros A t1 t2 v Hfree. 
-  inversion Hfree; [ left | right ]; assumption. 
 Qed. 
 
 Lemma free_shift_aux_free : forall (A : Type) (t : db_term A) v c,
