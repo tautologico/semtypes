@@ -62,6 +62,9 @@ let pred = Fun ("1-", fun x -> Num (x - 1))
 let ex1 = Abs (0, App (Const succ, App (Const succ, Var 0)))
 let ex2 = App (ex1, Const (Num 0))
 let ex3 = App (Const (Num 0), Const succ)   (* gets stuck *)
+let ex4 = App (Abs (0, Const (Num 1)),  (* runs forever *)
+               App (Abs (0, App (Var 0, Var 0)),
+                    Abs (0, App (Var 0, Var 0))))
 
 (* printing functions to display machine states in the style of 
    Felleisen's dissertation *)
@@ -131,6 +134,17 @@ let exec_trace t =
     | s' -> exec_loop s'
   in    
   exec_loop (STerm (t, [], PStop))
+
+let exec_trace_n t n = 
+  let rec exec_loop s i =
+    if i >= n then () else
+      let () = print_endline @@ show_state s in
+      match (cek_trans s) with
+      | Stuck -> print_endline "STUCK"
+      | SRet (PStop, v) -> Printf.printf "*** Final value: %s\n" (show_value v)
+      | s' -> exec_loop s'
+  in    
+  exec_loop (STerm (t, [], PStop)) 0
 
 let rec unload_closure t env = 
   match t with
