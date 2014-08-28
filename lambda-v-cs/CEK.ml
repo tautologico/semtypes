@@ -142,7 +142,7 @@ let exec_trace_n t n =
       match (cek_trans s) with
       | Stuck -> print_endline "STUCK"
       | SRet (PStop, v) -> Printf.printf "*** Final value: %s\n" (show_value v)
-      | s' -> exec_loop s'
+      | s' -> exec_loop s' (i+1)
   in    
   exec_loop (STerm (t, [], PStop)) 0
 
